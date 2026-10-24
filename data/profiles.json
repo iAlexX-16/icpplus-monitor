@@ -1,0 +1,11 @@
+[
+  {
+    "id": "madrid_huellas",
+    "name": "Madrid - Huellas",
+    "enabled": true,
+    "province": "Madrid",
+    "procedure_name": "POLICÍA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013",
+    "no_slots_phrases": [],
+    "selectors": {}
+  }
+]

@@ -1,0 +1,387 @@
+"""
+monitor.py
+==========
+
+ICPPLUS appointment monitor for GitHub Actions.
+"""
+
+import json
+import os
+import random
+import smtplib
+import sys
+import time
+import argparse
+from datetime import datetime, timezone
+from email.mime.text import MIMEText
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+
+from dotenv import load_dotenv
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait, Select
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
+
+
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+BASE_URL = "https://sede.administracionespublicas.gob.es/icpplus/index.html"
+
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
+STATUS_FILE = os.path.join(DATA_DIR, "status.json")
+DEBUG_SCREENSHOT_FILE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "debug_screenshot.png"
+)
+
+DEFAULT_SELECTORS = {
+    "cookie_accept_xpath": "//button[contains(text(),'Aceptar')]",
+    "province_select_id": "form",
+    "province_submit_id": "btnAceptar",
+    "no_cert_link_xpath": "//a[contains(text(),'sin certificado')]",
+    "tramite_select_id": "tramiteGrupo[0]",
+    "tramite_submit_id": "btnEntrar",
+    "intermediate_continue_xpaths": ["//input[@id='btnEntrar']"],
+    "calendar_indicator_id": "calendario",
+}
+
+DEFAULT_NO_SLOTS_PHRASES = [
+    "no hay citas disponibles",
+    "no existen citas disponibles",
+    "en este momento no hay citas disponibles",
+    "no hay horas disponibles",
+]
+
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORT = 587
+SMTP_USER = os.environ.get("GMAIL_EMAIL", "")
+SMTP_PASS = os.environ.get("GMAIL_APP_PASSWORD", "")
+ALERT_TO = os.environ.get("ALERT_EMAIL_TO", "") or SMTP_USER
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+
+class AccessBlockedError(RuntimeError):
+    pass
+
+
+def human_delay(a: float = 0.4, b: float = 1.0) -> None:
+    time.sleep(random.uniform(a, b))
+
+
+def build_driver() -> webdriver.Chrome:
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--window-size=1280,900")
+    options.add_argument("--lang=es-ES")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    )
+    driver = webdriver.Chrome(options=options)
+    driver.set_page_load_timeout(60)
+    return driver
+
+
+def wait_and_click(driver, by, value, timeout=20):
+    elem = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, value)))
+    elem.click()
+    return elem
+
+
+def wait_for(driver, by, value, timeout=20):
+    return WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, value)))
+
+
+def save_debug_screenshot(driver, log) -> None:
+    """Best-effort screenshot + page source dump for debugging failures."""
+    if driver is None:
+        return
+    try:
+        driver.save_screenshot(DEBUG_SCREENSHOT_FILE)
+        log("Saved debug screenshot to debug_screenshot.png")
+    except Exception as e:
+        log(f"Could not save debug screenshot: {e}")
+    try:
+        html_path = DEBUG_SCREENSHOT_FILE.replace(".png", ".html")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(driver.page_source)
+        log("Saved debug page source to debug_screenshot.html")
+    except Exception as e:
+        log(f"Could not save debug page source: {e}")
+    try:
+        log(f"Current URL at failure: {driver.current_url}")
+    except Exception:
+        pass
+
+
+def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
+    sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
+    no_slots_phrases = profile.get("no_slots_phrases") or DEFAULT_NO_SLOTS_PHRASES
+
+    log("Opening ICPPLUS home page...")
+    driver.get(BASE_URL)
+    human_delay(2, 4)
+    entry_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    if "403 forbidden" in driver.title.lower() or "you don't have permission to access" in entry_text:
+        raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.")
+
+    for cookie_xpath in [
+        sel["cookie_accept_xpath"],
+        "//*[@id='cookie_action_close_header']",
+        "//button[contains(text(),'ACEPTAR')]",
+    ]:
+        try:
+            wait_and_click(driver, By.XPATH, cookie_xpath, timeout=5)
+            log(f"Closed cookie banner using: {cookie_xpath}")
+            human_delay()
+            break
+        except TimeoutException:
+            continue
+
+    log(f"Selecting province '{profile['province']}'...")
+    try:
+        province_select = Select(wait_for(driver, By.ID, sel["province_select_id"]))
+        province_select.select_by_visible_text(profile["province"])
+    except Exception as e:
+        log(f"Province select failed with Select(): {e}. Trying direct option click fallback...")
+        save_debug_screenshot(driver, log)
+        raise
+    human_delay()
+    wait_and_click(driver, By.ID, sel["province_submit_id"])
+    human_delay(2, 4)
+
+    log("Choosing 'sin certificado digital'...")
+    wait_and_click(driver, By.XPATH, sel["no_cert_link_xpath"])
+    human_delay(2, 4)
+
+    log(f"Selecting procedure '{profile['procedure_name']}'...")
+    tramite_select = Select(wait_for(driver, By.ID, sel["tramite_select_id"]))
+    tramite_select.select_by_visible_text(profile["procedure_name"])
+    human_delay()
+    wait_and_click(driver, By.ID, sel["tramite_submit_id"])
+    human_delay(2, 4)
+
+    for xpath in sel.get("intermediate_continue_xpaths", []):
+        try:
+            wait_and_click(driver, By.XPATH, xpath, timeout=8)
+            human_delay(1, 2)
+        except TimeoutException:
+            continue
+
+    page_text = driver.page_source.lower()
+    for phrase in no_slots_phrases:
+        if phrase.lower() in page_text:
+            log(f"No-slots message found ('{phrase}').")
+            return False, driver.current_url
+
+    try:
+        wait_for(driver, By.ID, sel["calendar_indicator_id"], timeout=8)
+        log("Calendar/slot-selection element found - slots may be available!")
+        return True, driver.current_url
+    except TimeoutException:
+        raise RuntimeError(
+            "No availability message or calendar found. The flow may require "
+            "manual identification/CAPTCHA, or its selectors may have changed. "
+            "Availability could not be determined."
+        )
+
+
+def send_telegram(body: str) -> bool:
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram not configured - skipping notification.")
+        return False
+    request = Request(
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+        data=json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": body}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            ok = json.load(response).get("ok", False)
+        print("Telegram notification sent." if ok else "Telegram rejected the notification.")
+        return ok
+    except (URLError, ValueError):
+        # Do not log the exception: request URLs contain the secret bot token.
+        print("Telegram notification failed; check the token, chat ID and network.")
+        return False
+
+
+def send_email(subject: str, body: str) -> None:
+    if not SMTP_USER or not SMTP_PASS or not ALERT_TO:
+        print("Email not configured - skipping notification.")
+        return
+    try:
+        msg = MIMEText(body, "plain", "utf-8")
+        msg["Subject"] = subject
+        msg["From"] = SMTP_USER
+        msg["To"] = ALERT_TO
+
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASS)
+            server.sendmail(SMTP_USER, [ALERT_TO], msg.as_string())
+    except Exception as e:
+        print(f"Email send error: {e}")
+
+
+def load_profiles() -> list:
+    with open(PROFILES_FILE, "r", encoding="utf-8") as f:
+        profiles = json.load(f)
+    if not isinstance(profiles, list):
+        raise ValueError("data/profiles.json must contain a list.")
+    ids = set()
+    for profile in profiles:
+        for key in ("id", "name", "province", "procedure_name"):
+            if not isinstance(profile.get(key), str) or not profile[key].strip():
+                raise ValueError(f"Each profile needs a nonempty {key}.")
+        if profile["id"] in ids:
+            raise ValueError(f"Duplicate profile ID: {profile['id']}")
+        ids.add(profile["id"])
+    return profiles
+
+
+def load_status() -> dict:
+    if not os.path.exists(STATUS_FILE):
+        return {"profiles": {}, "last_run": None}
+    with open(STATUS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_status(status: dict) -> None:
+    with open(STATUS_FILE, "w", encoding="utf-8") as f:
+        json.dump(status, f, indent=2, ensure_ascii=False)
+
+
+def run_profile(profile: dict) -> dict:
+    logs = []
+
+    def log(msg):
+        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}"
+        logs.append(line)
+        print(f"[{profile['name']}] {line}")
+
+    driver = None
+    try:
+        driver = build_driver()
+        available, url = check_appointments(driver, profile, log)
+        return {
+            "name": profile["name"],
+            "province": profile["province"],
+            "procedure_name": profile["procedure_name"],
+            "status": "available" if available else "unavailable",
+            "url": url,
+            "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "logs": logs[-20:],
+        }
+    except AccessBlockedError as e:
+        log(str(e))
+        save_debug_screenshot(driver, log)
+        return {
+            "name": profile["name"],
+            "province": profile["province"],
+            "procedure_name": profile["procedure_name"],
+            "status": "blocked",
+            "url": BASE_URL,
+            "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "logs": logs[-20:],
+        }
+    except WebDriverException as e:
+        log(f"Browser/WebDriver error: {e}")
+        save_debug_screenshot(driver, log)
+        return {
+            "name": profile["name"],
+            "province": profile["province"],
+            "procedure_name": profile["procedure_name"],
+            "status": "error",
+            "url": None,
+            "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "logs": logs[-20:],
+        }
+    except Exception as e:
+        log(f"Unexpected error: {e}")
+        save_debug_screenshot(driver, log)
+        return {
+            "name": profile["name"],
+            "province": profile["province"],
+            "procedure_name": profile["procedure_name"],
+            "status": "error",
+            "url": None,
+            "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "logs": logs[-20:],
+        }
+    finally:
+        if driver is not None:
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
+
+def main():
+    profiles = load_profiles()
+    status = load_status()
+    status.setdefault("profiles", {})
+    active_ids = {profile["id"] for profile in profiles}
+    status["profiles"] = {key: value for key, value in status["profiles"].items() if key in active_ids}
+
+    if not profiles:
+        print("No profiles configured in data/profiles.json - nothing to do.")
+        status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        save_status(status)
+        return
+
+    any_available = False
+
+    for profile in profiles:
+        if not profile.get("enabled", True):
+            print(f"Skipping disabled profile: {profile['name']}")
+            continue
+
+        print(f"=== Checking profile: {profile['name']} ===")
+        result = run_profile(profile)
+        status["profiles"][profile["id"]] = result
+
+        if result["status"] == "available":
+            any_available = True
+            subject = f"🔔 ICPPLUS slot may be available: {result['name']}"
+            body = (
+                f"SLOT MAY BE AVAILABLE\n\n"
+                f"Client: {result['name']}\n"
+                f"Province: {result['province']}\n"
+                f"Procedure: {result['procedure_name']}\n\n"
+                f"Link: {result['url']}\n\n"
+                f"Open this link, redo province/procedure selection if "
+                f"needed, use Autofill (Tampermonkey), solve CAPTCHA + SMS, "
+                f"and submit FAST - slots disappear in seconds!"
+            )
+            send_email(subject, body)
+            send_telegram(body)
+
+        human_delay(1.5, 3)
+
+    status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    save_status(status)
+
+    if any_available:
+        print("\n*** AT LEAST ONE PROFILE HAS POSSIBLE SLOTS ***")
+    else:
+        print("\nNo confirmed availability in this run. Check each profile's status for access errors.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Check ICPPLUS and send configured alerts.")
+    parser.add_argument("--test-telegram", action="store_true", help="Send a Telegram connection test, without checking appointments.")
+    args = parser.parse_args()
+    if args.test_telegram:
+        sys.exit(0 if send_telegram("ICPPLUS Monitor: conexión con Telegram verificada.") else 1)
+    main()

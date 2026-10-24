@@ -1,0 +1,11 @@
+.venv/
+.cache/
+__pycache__/
+.env
+.env.*
+!.env.example
+debug_screenshot.*
+official-entry.html
+*.log
+_site/
+
