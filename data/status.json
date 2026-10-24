@@ -1,4 +1,20 @@
 {
-  "profiles": {},
-  "last_run": null
+  "profiles": {
+    "madrid_huellas": {
+      "name": "Madrid - Huellas",
+      "province": "Madrid",
+      "procedure_name": "POLICÍA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013",
+      "status": "blocked",
+      "url": "https://sede.administracionespublicas.gob.es/icpplus/index.html",
+      "last_check": "2026-10-24T23:58:49+00:00",
+      "logs": [
+        "[23:58:44] Opening ICPPLUS home page...",
+        "[23:58:49] ICPPLUS returned 403 Forbidden; availability could not be checked.",
+        "[23:58:49] Saved debug screenshot to debug_screenshot.png",
+        "[23:58:49] Saved debug page source to debug_screenshot.html",
+        "[23:58:49] Current URL at failure: https://sede.administracionespublicas.gob.es/icpplus/index.html"
+      ]
+    }
+  },
+  "last_run": "2026-10-24T23:58:50+00:00"
 }
