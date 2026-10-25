@@ -1,19 +1,10 @@
 {
+  "last_run": "2026-10-25T01:52:44+00:00",
   "profiles": {
     "madrid_huellas": {
-      "name": "Madrid - Huellas",
-      "province": "Madrid",
-      "procedure_name": "POLICÍA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013",
-      "status": "error",
-      "url": null,
-      "last_check": "2026-10-25T01:34:40+00:00",
-      "logs": [
-        "[01:33:40] Chrome 156.0.8078.47; ChromeDriver 156.0.8078.47.",
-        "[01:33:40] Opening ICPPLUS home page...",
-        "[01:34:40] Browser/WebDriver error: Message: timeout: Timed out receiving message from renderer: -0.002\n  (Session info: chrome=156.0.8078.47)\nStacktrace:\n#0 0x5646565257ea <unknown>\n#1 0x564655e649e5 <unknown>\n#2 0x564655e54942 <unknown>\n#3 0x564655e546b6 <unknown>\n#4 0x564655e52e3b <unknown>\n#5 0x564655e5324f <unknown>\n#6 0x564655e5e866 <unknown>\n#7 0x564655e6f8d0 <unknown>\n#8 0x564655e7557b <unknown>\n#9 0x564655e53b27 <unknown>\n#10 0x564655e53848 <unknown>\n#11 0x564655e6f793 <unknown>\n#12 0x564655ee2b7e <unknown>\n#13 0x564655e9dcd7 <unknown>\n#14 0x564655e9cfee <unknown>\n#15 0x564655e9dac1 <unknown>\n#16 0x5646564e87ac <unknown>\n#17 0x5646564e6fb5 <unknown>\n#18 0x5646564d2315 <unknown>\n#19 0x5646564e7c1a <unknown>\n#20 0x5646564babf9 <unknown>\n#21 0x56465650fef8 <unknown>\n#22 0x564656510095 <unknown>\n#23 0x564656524183 <unknown>\n#24 0x7fb50cc9cb84 <unknown>\n#25 0x7fb50cd29ecc <unknown>\n",
-        "[01:34:40] Page diagnostics omitted because applicant details are configured."
-      ]
+      "status": "blocked",
+      "last_check": "2026-10-25T01:52:35+00:00",
+      "url": "https://icp.administracionelectronica.gob.es/icpplus/index.html"
     }
-  },
-  "last_run": "2026-10-25T01:34:43+00:00"
+  }
 }
