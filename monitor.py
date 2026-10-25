@@ -129,6 +129,8 @@ def check_access(driver) -> None:
         raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.")
     if "request rejected" in title or "requested url was rejected" in text:
         raise AccessBlockedError("ICPPLUS rejected the request; availability could not be checked.")
+    if "intrusion prevention" in title or "blocked by intrusion prevention" in text:
+        raise AccessBlockedError("Network intrusion prevention blocked access; availability could not be checked.")
     if not text.strip():
         raise AccessBlockedError("ICPPLUS returned an empty page; availability could not be checked.")
     challenges = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='recaptcha'], iframe[src*='hcaptcha'], input[name='captcha']")

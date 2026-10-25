@@ -29,6 +29,12 @@ class MonitorTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Availability could not be determined"):
                 monitor.read_availability(driver, profile, Mock())
 
+    def test_network_firewall_is_reported_as_blocked(self):
+        driver = Mock(title="Intrusion Prevention Violation")
+        driver.find_element.return_value.text = "Your attempt is blocked by Intrusion Prevention."
+        with self.assertRaises(monitor.AccessBlockedError):
+            monitor.check_access(driver)
+
     def test_identity_configuration_disables_page_diagnostics(self):
         driver = Mock()
         with patch.object(monitor, "ICP_NIE", "PRIVATE_DOCUMENT"):
