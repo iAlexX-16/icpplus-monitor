@@ -18,9 +18,10 @@ duplicado y Ley 14/2013), con alias neutro.
 4. En **Actions → ICPPLUS Monitor → Run workflow**, inicia una comprobación.
 5. En **Actions → Publish dashboard**, consulta la URL del despliegue.
 
-Horario heredado: cada 10 minutos de **06:00 a 12:50 UTC**, y de **22:00 a
-22:50 UTC**, diariamente. Está en `.github/workflows/monitor.yml`.
-GitHub puede retrasar ejecuciones. El panel recarga resultados cada minuto;
+Comprobación programada **cada 5 minutos, las 24 horas, todos los días**
+(`*/5 * * * *`). Está en `.github/workflows/monitor.yml`.
+GitHub puede retrasar ejecuciones: el intervalo no está garantizado.
+El panel recarga resultados cada minuto;
 esto no inicia otra comprobación.
 
 El panel público incluye `Perfil 1`, provincia, trámite, estado y hora.

@@ -2,7 +2,10 @@ name: ICPPLUS Monitor
 
 on:
   schedule:
-    - cron: "*/10 22,6-12 * * *"
+    - cron: "*/5 * * * *"
+  push:
+    branches: [main]
+    paths: ['monitor.py', '.github/workflows/monitor.yml']
   workflow_dispatch: {}
 
 permissions:
@@ -29,15 +32,19 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Install Chrome
+        id: chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
+          install-chromedriver: true
 
-      - name: Install matching ChromeDriver
-        uses: nanasess/setup-chromedriver@v2
+      - name: Verify monitor
+        run: python -m unittest discover -s tests -v
 
       - name: Run monitor
         env:
+          CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.chrome.outputs.chromedriver-path }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           ICP_NIE: ${{ secrets.ICP_NIE }}

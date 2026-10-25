@@ -1,0 +1,38 @@
+name: Diagnose ICPPLUS connection
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ['diagnose_connection.py', '.github/workflows/diagnose.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          chrome-version: stable
+          install-chromedriver: true
+      - name: Compare network and browser access (no applicant secrets)
+        env:
+          CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+          CHROMEDRIVER_PATH: ${{ steps.chrome.outputs.chromedriver-path }}
+        run: xvfb-run -a python -u diagnose_connection.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: connection-diagnosis
+          path: _diagnostics/report.json
+          if-no-files-found: error
+          retention-days: 7

@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
@@ -95,7 +96,10 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--lang=es-ES")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(options=options)
+    if os.environ.get("CHROME_BINARY"):
+        options.binary_location = os.environ["CHROME_BINARY"]
+    driver_path = os.environ.get("CHROMEDRIVER_PATH")
+    driver = webdriver.Chrome(options=options, service=Service(driver_path) if driver_path else Service())
     driver.set_page_load_timeout(60)
     return driver
 
@@ -315,6 +319,9 @@ def run_profile(profile: dict) -> dict:
     driver = None
     try:
         driver = build_driver()
+        browser_version = driver.capabilities.get("browserVersion", "unknown")
+        driver_version = driver.capabilities.get("chrome", {}).get("chromedriverVersion", "unknown").split(" ")[0]
+        log(f"Chrome {browser_version}; ChromeDriver {driver_version}.")
         available, url = check_appointments(driver, profile, log)
         return {
             "name": profile["name"],

@@ -12,6 +12,13 @@ from publish_dashboard import build_public_dashboard
 
 
 class MonitorTests(unittest.TestCase):
+    def test_explicit_chrome_and_driver_paths_are_used_together(self):
+        with patch.dict(monitor.os.environ, {"CHROME_BINARY": "/opt/chrome", "CHROMEDRIVER_PATH": "/opt/chromedriver"}), \
+             patch.object(monitor.webdriver, "Chrome") as create:
+            monitor.build_driver()
+        self.assertEqual(create.call_args.kwargs["options"].binary_location, "/opt/chrome")
+        self.assertEqual(create.call_args.kwargs["service"].path, "/opt/chromedriver")
+
     def test_blocked_entry_does_not_report_no_slots(self):
         driver = Mock(title="403 Forbidden")
         driver.find_element.return_value.text = "Forbidden"

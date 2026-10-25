@@ -8,4 +8,5 @@ debug_screenshot.*
 official-entry.html
 *.log
 _site/
+_diagnostics/
 
