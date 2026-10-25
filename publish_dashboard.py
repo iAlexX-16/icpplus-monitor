@@ -24,7 +24,7 @@ def build_public_dashboard(root: Path, output: Path) -> None:
             public_results[public_id] = {
                 "status": result["status"],
                 "last_check": result.get("last_check"),
-                "url": "https://sede.administracionespublicas.gob.es/icpplus/index.html",
+                "url": "https://icp.administracionelectronica.gob.es/icpplustiem/index.html",
             }
     (output / "data").mkdir(parents=True, exist_ok=True)
     copyfile(root / "index.html", output / "index.html")

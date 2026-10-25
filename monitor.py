@@ -29,7 +29,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-BASE_URL = "https://sede.administracionespublicas.gob.es/icpplus/index.html"
+BASE_URL = "https://icp.administracionelectronica.gob.es/icpplustiem/index.html"
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
@@ -39,13 +39,12 @@ DEBUG_SCREENSHOT_FILE = os.path.join(
 )
 
 DEFAULT_SELECTORS = {
-    "cookie_accept_xpath": "//button[contains(text(),'Aceptar')]",
+    "cookie_accept_xpath": "//*[@id='cookie_action_close_header']",
     "province_select_id": "form",
     "province_submit_id": "btnAceptar",
-    "no_cert_link_xpath": "//a[contains(text(),'sin certificado')]",
-    "tramite_select_id": "tramiteGrupo[0]",
-    "tramite_submit_id": "btnEntrar",
-    "intermediate_continue_xpaths": ["//input[@id='btnEntrar']"],
+    "tramite_select_id": "tramiteGrupo[1]",
+    "tramite_submit_id": "btnAceptar",
+    "no_cert_id": "btnEntrar",
     "calendar_indicator_id": "calendario",
 }
 
@@ -63,9 +62,16 @@ SMTP_PASS = os.environ.get("GMAIL_APP_PASSWORD", "")
 ALERT_TO = os.environ.get("ALERT_EMAIL_TO", "") or SMTP_USER
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+ICP_NIE = os.environ.get("ICP_NIE", "")
+ICP_FULL_NAME = os.environ.get("ICP_FULL_NAME", "")
+ICP_NATIONALITY = os.environ.get("ICP_NATIONALITY", "")
 
 
 class AccessBlockedError(RuntimeError):
+    pass
+
+
+class ApplicantDetailsRequiredError(RuntimeError):
     pass
 
 
@@ -80,11 +86,6 @@ def build_driver() -> webdriver.Chrome:
     options.add_argument("--lang=es-ES")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    )
     driver = webdriver.Chrome(options=options)
     driver.set_page_load_timeout(60)
     return driver
@@ -104,6 +105,9 @@ def save_debug_screenshot(driver, log) -> None:
     """Best-effort screenshot + page source dump for debugging failures."""
     if driver is None:
         return
+    if ICP_NIE or ICP_FULL_NAME:
+        log("Page diagnostics omitted because applicant details are configured.")
+        return
     try:
         driver.save_screenshot(DEBUG_SCREENSHOT_FILE)
         log("Saved debug screenshot to debug_screenshot.png")
@@ -116,27 +120,49 @@ def save_debug_screenshot(driver, log) -> None:
         log("Saved debug page source to debug_screenshot.html")
     except Exception as e:
         log(f"Could not save debug page source: {e}")
+
+
+def check_access(driver) -> None:
+    text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    title = driver.title.lower()
+    if "403 forbidden" in title or "you don't have permission to access" in text:
+        raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.")
+    if "request rejected" in title or "requested url was rejected" in text:
+        raise AccessBlockedError("ICPPLUS rejected the request; availability could not be checked.")
+    if not text.strip():
+        raise AccessBlockedError("ICPPLUS returned an empty page; availability could not be checked.")
+    challenges = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='recaptcha'], iframe[src*='hcaptcha'], input[name='captcha']")
+    if any(element.is_displayed() for element in challenges):
+        raise AccessBlockedError("Manual CAPTCHA required; availability could not be checked.")
+
+
+def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
+    check_access(driver)
+    page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+    for phrase in profile.get("no_slots_phrases") or DEFAULT_NO_SLOTS_PHRASES:
+        if phrase.lower() in page_text:
+            log("An explicit no-appointments message was found.")
+            return False, BASE_URL
+    sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
     try:
-        log(f"Current URL at failure: {driver.current_url}")
-    except Exception:
-        pass
+        wait_for(driver, By.ID, sel["calendar_indicator_id"], timeout=8)
+        log("Calendar/slot-selection element found - slots may be available!")
+        return True, BASE_URL
+    except TimeoutException:
+        raise RuntimeError("No availability message or calendar found. Availability could not be determined.")
 
 
 def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
     sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
-    no_slots_phrases = profile.get("no_slots_phrases") or DEFAULT_NO_SLOTS_PHRASES
 
     log("Opening ICPPLUS home page...")
     driver.get(BASE_URL)
     human_delay(2, 4)
-    entry_text = driver.find_element(By.TAG_NAME, "body").text.lower()
-    if "403 forbidden" in driver.title.lower() or "you don't have permission to access" in entry_text:
-        raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.")
+    check_access(driver)
 
     for cookie_xpath in [
         sel["cookie_accept_xpath"],
-        "//*[@id='cookie_action_close_header']",
-        "//button[contains(text(),'ACEPTAR')]",
+        "//button[contains(text(),'Aceptar cookies')]",
     ]:
         try:
             wait_and_click(driver, By.XPATH, cookie_xpath, timeout=5)
@@ -151,16 +177,14 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
         province_select = Select(wait_for(driver, By.ID, sel["province_select_id"]))
         province_select.select_by_visible_text(profile["province"])
     except Exception as e:
-        log(f"Province select failed with Select(): {e}. Trying direct option click fallback...")
+        log("Province selection failed.")
         save_debug_screenshot(driver, log)
         raise
     human_delay()
     wait_and_click(driver, By.ID, sel["province_submit_id"])
     human_delay(2, 4)
 
-    log("Choosing 'sin certificado digital'...")
-    wait_and_click(driver, By.XPATH, sel["no_cert_link_xpath"])
-    human_delay(2, 4)
+    check_access(driver)
 
     log(f"Selecting procedure '{profile['procedure_name']}'...")
     tramite_select = Select(wait_for(driver, By.ID, sel["tramite_select_id"]))
@@ -168,30 +192,32 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
     human_delay()
     wait_and_click(driver, By.ID, sel["tramite_submit_id"])
     human_delay(2, 4)
+    check_access(driver)
 
-    for xpath in sel.get("intermediate_continue_xpaths", []):
-        try:
-            wait_and_click(driver, By.XPATH, xpath, timeout=8)
+    log("Opening presentation without Cl@ve...")
+    wait_and_click(driver, By.ID, sel["no_cert_id"])
+    human_delay(1, 2)
+    check_access(driver)
+
+    if driver.find_elements(By.ID, "txtIdCitado"):
+        if not all((ICP_NIE, ICP_FULL_NAME, ICP_NATIONALITY)):
+            raise ApplicantDetailsRequiredError("Applicant details required: configure ICP_NIE, ICP_FULL_NAME and ICP_NATIONALITY as secrets.")
+        log("Identifying the applicant using private configuration...")
+        wait_for(driver, By.ID, "txtIdCitado").send_keys(ICP_NIE)
+        wait_for(driver, By.ID, "txtDesCitado").send_keys(ICP_FULL_NAME)
+        Select(wait_for(driver, By.ID, "txtPaisNac")).select_by_visible_text(ICP_NATIONALITY)
+        wait_and_click(driver, By.ID, "btnEnviar")
+        human_delay(1, 2)
+        check_access(driver)
+
+    # This button only opens availability; no date, office or reservation is submitted.
+    request_buttons = driver.find_elements(By.XPATH, "//input[@value='Solicitar Cita' or @value='Solicitar cita'] | //button[normalize-space()='Solicitar Cita' or normalize-space()='Solicitar cita']")
+    for button in request_buttons:
+        if button.is_displayed():
+            button.click()
             human_delay(1, 2)
-        except TimeoutException:
-            continue
-
-    page_text = driver.page_source.lower()
-    for phrase in no_slots_phrases:
-        if phrase.lower() in page_text:
-            log(f"No-slots message found ('{phrase}').")
-            return False, driver.current_url
-
-    try:
-        wait_for(driver, By.ID, sel["calendar_indicator_id"], timeout=8)
-        log("Calendar/slot-selection element found - slots may be available!")
-        return True, driver.current_url
-    except TimeoutException:
-        raise RuntimeError(
-            "No availability message or calendar found. The flow may require "
-            "manual identification/CAPTCHA, or its selectors may have changed. "
-            "Availability could not be determined."
-        )
+            break
+    return read_availability(driver, profile, log)
 
 
 def send_telegram(body: str) -> bool:
@@ -265,6 +291,9 @@ def run_profile(profile: dict) -> dict:
     logs = []
 
     def log(msg):
+        for secret in (ICP_NIE, ICP_FULL_NAME, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_PASS):
+            if secret:
+                msg = msg.replace(secret, "[redacted]")
         ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
         line = f"[{ts}] {msg}"
         logs.append(line)
@@ -283,14 +312,14 @@ def run_profile(profile: dict) -> dict:
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],
         }
-    except AccessBlockedError as e:
+    except (AccessBlockedError, ApplicantDetailsRequiredError) as e:
         log(str(e))
         save_debug_screenshot(driver, log)
         return {
             "name": profile["name"],
             "province": profile["province"],
             "procedure_name": profile["procedure_name"],
-            "status": "blocked",
+            "status": "requires_input" if isinstance(e, ApplicantDetailsRequiredError) else "blocked",
             "url": BASE_URL,
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],

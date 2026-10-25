@@ -96,7 +96,7 @@
     <div class="last-run" id="lastRun">Loading…</div>
     <div style="display:flex; gap:8px;">
       <a class="btn" id="refreshBtn" href="#">↻ Refresh</a>
-      <a class="btn primary" href="https://sede.administracionespublicas.gob.es/icpplus/index.html" target="_blank">Open ICPPLUS</a>
+      <a class="btn primary" href="https://icp.administracionelectronica.gob.es/icpplustiem/index.html" target="_blank">Open ICPPLUS</a>
     </div>
   </div>
 
@@ -141,6 +141,7 @@
       case 'unavailable': return { cls: 'unavailable', text: 'No slots' };
       case 'error': return { cls: 'error', text: 'Error' };
       case 'blocked': return { cls: 'error', text: 'Access blocked' };
+      case 'requires_input': return { cls: 'pending', text: 'Applicant details required' };
       default: return { cls: 'pending', text: 'Pending' };
     }
   }

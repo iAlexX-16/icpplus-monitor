@@ -10,6 +10,10 @@ duplicado y Ley 14/2013), con alias neutro.
 2. En **Settings → Secrets and variables → Actions**, crea los secretos
    `TELEGRAM_BOT_TOKEN` (BotFather) y `TELEGRAM_CHAT_ID` (chat destinatario).
    Envía `/start` a tu bot. Nunca guardes el token en Git.
+   La identificación del solicitante usa otros tres secretos: `ICP_NIE`,
+   `ICP_FULL_NAME` y `ICP_NATIONALITY` (texto exacto del país, por ejemplo CHINA).
+   Solo se envían al portal oficial para consultar disponibilidad. Con datos
+   de identidad configurados se desactivan capturas y volcados HTML.
 3. En **Settings → Pages → Source**, elige **GitHub Actions**.
 4. En **Actions → ICPPLUS Monitor → Run workflow**, inicia una comprobación.
 5. En **Actions → Publish dashboard**, consulta la URL del despliegue.
@@ -53,12 +57,14 @@ validarse mientras el portal esté bloqueado.
 
 - `available`: se encontró el calendario; se avisa de posible disponibilidad.
 - `unavailable`: hay un mensaje explícito de que no hay citas.
-- `blocked`: el portal devuelve 403; disponibilidad desconocida.
+- `blocked`: el portal rechaza el acceso o exige CAPTCHA; disponibilidad desconocida.
+- `requires_input`: faltan secretos de identificación del solicitante.
 - `error`: fallo del navegador, selector o flujo; disponibilidad desconocida.
 
-El flujo heredado puede requerir ajustes cuando el portal sea accesible.
-Si exige identificación, CAPTCHA o SMS antes de mostrar disponibilidad,
-el proyecto no los completa automáticamente ni puede confirmar citas.
+El flujo usa la entrada vigente `/icpplustiem/index.html`: provincia, trámite,
+presentación sin Cl@ve e identificación mediante secretos. Solo pulsa
+«Solicitar Cita» para consultar la disponibilidad, sin elegir fecha ni reservar.
+Si exige CAPTCHA o SMS, requiere intervención manual.
 Un bloqueo o una pantalla desconocida no se interpretan como «sin citas».
 La reserva se completa manualmente.
 

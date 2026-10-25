@@ -15,6 +15,7 @@ class MonitorTests(unittest.TestCase):
     def test_blocked_entry_does_not_report_no_slots(self):
         driver = Mock(title="403 Forbidden")
         driver.find_element.return_value.text = "Forbidden"
+        driver.find_elements.return_value = []
         with patch.object(monitor, "human_delay"):
             with self.assertRaises(monitor.AccessBlockedError):
                 monitor.check_appointments(driver, {}, Mock())
@@ -22,12 +23,36 @@ class MonitorTests(unittest.TestCase):
     def test_unknown_flow_is_an_error_not_unavailable(self):
         driver = Mock(title="Cita previa", page_source="Identification required")
         driver.find_element.return_value.text = "Identification required"
+        driver.find_elements.return_value = []
         profile = {"province": "Madrid", "procedure_name": "Huellas"}
-        with patch.object(monitor, "human_delay"), patch.object(monitor, "wait_and_click"), \
-             patch.object(monitor, "Select"), patch.object(monitor, "wait_for") as wait:
-            wait.side_effect = [Mock(), Mock(), monitor.TimeoutException()]
+        with patch.object(monitor, "wait_for", side_effect=monitor.TimeoutException()):
             with self.assertRaisesRegex(RuntimeError, "Availability could not be determined"):
+                monitor.read_availability(driver, profile, Mock())
+
+    def test_identity_configuration_disables_page_diagnostics(self):
+        driver = Mock()
+        with patch.object(monitor, "ICP_NIE", "PRIVATE_DOCUMENT"):
+            monitor.save_debug_screenshot(driver, Mock())
+        driver.save_screenshot.assert_not_called()
+
+    def test_missing_identity_stops_before_submission(self):
+        driver = Mock()
+        driver.find_elements.return_value = [Mock()]
+        profile = {"province": "Madrid", "procedure_name": "Huellas"}
+        with patch.object(monitor, "human_delay"), patch.object(monitor, "check_access"), \
+             patch.object(monitor, "wait_and_click") as click, patch.object(monitor, "Select"), \
+             patch.object(monitor, "wait_for"), patch.object(monitor, "ICP_NIE", ""):
+            with self.assertRaises(monitor.ApplicantDetailsRequiredError):
                 monitor.check_appointments(driver, profile, Mock())
+            self.assertNotIn("btnEnviar", [call.args[2] for call in click.call_args_list])
+
+    def test_applicant_secrets_are_redacted_from_error_logs(self):
+        profile = {"id": "test", "name": "Alias", "province": "Madrid", "procedure_name": "Huellas"}
+        with patch.object(monitor, "ICP_NIE", "PRIVATE_DOCUMENT"), \
+             patch.object(monitor, "build_driver", side_effect=RuntimeError("Failed: PRIVATE_DOCUMENT")), \
+             contextlib.redirect_stdout(io.StringIO()):
+            result = monitor.run_profile(profile)
+        self.assertNotIn("PRIVATE_DOCUMENT", json.dumps(result))
 
     def test_telegram_failure_does_not_disclose_token(self):
         output = io.StringIO()

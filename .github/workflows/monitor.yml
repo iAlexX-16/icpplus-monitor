@@ -40,6 +40,9 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ICP_NIE: ${{ secrets.ICP_NIE }}
+          ICP_FULL_NAME: ${{ secrets.ICP_FULL_NAME }}
+          ICP_NATIONALITY: ${{ secrets.ICP_NATIONALITY }}
           GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}

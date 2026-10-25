@@ -5,6 +5,7 @@
 // @description  Autofills your personal details on the ICPPLUS appointment form for one of several saved profiles. Does NOT submit the form, solve CAPTCHAs, or handle SMS verification.
 // @match        https://sede.administracionespublicas.gob.es/icpplus/*
 // @match        https://icp.administracionelectronica.gob.es/icpplus/*
+// @match        https://icp.administracionelectronica.gob.es/icpplustiem/*
 // @grant        none
 // ==/UserScript==
 
