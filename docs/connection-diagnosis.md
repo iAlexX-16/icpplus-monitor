@@ -43,16 +43,34 @@ La prueba posterior sigue mostrando el fallo de conectividad.
 
 ## Funcionamiento configurado
 
-El monitor está programado cada cinco minutos, las 24 horas, mediante
-`*/5 * * * *`. GitHub puede retrasar o descartar ejecuciones programadas;
-el intervalo no es una garantía de puntualidad.
+El monitor se trasladó a una tarea de Windows cada cinco minutos. La
+ejecución automática de Azure se desactivó para no duplicar comprobaciones.
+El equipo debe permanecer encendido, despierto y con la sesión iniciada.
 
 Mientras la conexión falle, el resultado es `error`, sin afirmar que no hay
 citas. Aumentar el timeout prolongaría la espera sin restablecer la conexión.
-Para obtener consultas reales se necesita un entorno con acceso al portal,
-por ejemplo un equipo propio en una red que permita abrirlo. La instalación
-de un runner propio es un cambio adicional que requiere elegir y autorizar
-ese equipo; este trabajo no instala ningún servicio local de acceso remoto.
+La solución local no instala un runner de GitHub ni un servicio de acceso
+remoto. El resultado se publica desde el propio equipo con Git Credential
+Manager y sin datos de identidad.
+
+## Validación local posterior
+
+Se corrigió la entrada pública a `/icpplus/index.html`: iniciar directamente
+en `/icpplustiem/index.html` daba una página vacía para una sesión nueva en
+la prueba local. Esto no altera el diagnóstico TCP de Azure, que fallaba
+antes de solicitar cualquier ruta HTTP.
+
+El 25 de octubre de 2026 a las 01:50:14 UTC, una consulta desde Chrome visible
+con un perfil propio y persistente completó provincia, trámite, identificación
+y solicitud de disponibilidad. Encontró un mensaje explícito de ausencia
+de citas. Otras consultas recibieron `Request Rejected` después de la
+selección de provincia: el acceso local puede ser intermitente y los
+rechazos se mantienen como estado `blocked`.
+
+Se conserva la sesión en un perfil dedicado, se vuelve a renderizar el
+formulario si contiene identificadores de sesión en la URL y se termina
+la sesión mediante `Salir` cuando el portal ofrece esa opción. Nunca se
+selecciona una fecha ni se confirma una reserva.
 
 El diagnóstico puede repetirse en Actions, con el workflow
 `Diagnose ICPPLUS connection`. Solo hace solicitudes anónimas acotadas y

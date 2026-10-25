@@ -1,10 +1,49 @@
 # ICPPLUS Monitor
 
-Monitor de citas de extranjería con Selenium, avisos por Telegram y panel en
+Monitor de citas de extranjería con Chrome, avisos por Telegram y panel en
 GitHub Pages. Configurado para Madrid, toma de huellas (inicial, renovación,
-duplicado y Ley 14/2013), con alias neutro.
+duplicado y Ley 14/2013), con alias neutro. Las comprobaciones automáticas se
+ejecutan en Windows cada cinco minutos, usando un perfil propio de Chrome.
 
-## GitHub Actions y Pages
+## Ejecución automática en Windows
+
+La tarea **ICPPLUS Monitor (local)** ejecuta `local_runner.ps1` cada cinco
+minutos. El usuario debe mantener la sesión de Windows iniciada y el equipo
+encendido, despierto y conectado a Internet. Chrome se muestra durante cada
+comprobación y se cierra al terminar. No se necesita una ventana de terminal.
+
+Los secretos locales se guardan cifrados con DPAPI para el usuario de Windows
+actual en `.local/secrets.json`. El perfil `.local/chrome-profile` es exclusivo
+del monitor; no copia cookies del perfil personal. `.local/` está excluido de Git.
+
+Para preparar otra instalación, crea el entorno virtual e instala
+`requirements.txt`, luego pasa un JSON por la entrada estándar a
+`configure_local_secrets.ps1` con las claves `TELEGRAM_BOT_TOKEN`,
+`TELEGRAM_CHAT_ID`, `ICP_NIE`, `ICP_FULL_NAME` e `ICP_NATIONALITY`.
+Los valores no deben guardarse en un archivo de código ni en el repositorio.
+
+```powershell
+# Inicio de sesión para publicar el panel; se guarda en el Administrador de credenciales.
+git credential-manager github login --username iAlexX-16 --device
+# Primera comprobación y registro de la tarea.
+.\local_runner.ps1
+.\install_local_task.ps1
+Get-ScheduledTaskInfo -TaskName 'ICPPLUS Monitor (local)'
+```
+
+El log local está en `.local/monitor.log`; el resultado, en `data/status.json`.
+`publish_local_status.py` publica únicamente estado, hora y un enlace público,
+sin datos de identidad, registros ni enlaces de sesión. GitHub Pages se
+actualiza al recibir esos resultados. Las ejecuciones locales no se solapan.
+
+Para pausar o reactivar la tarea:
+
+```powershell
+Disable-ScheduledTask -TaskName 'ICPPLUS Monitor (local)'
+Enable-ScheduledTask -TaskName 'ICPPLUS Monitor (local)'
+```
+
+## Panel en GitHub Pages y comprobación manual en Actions
 
 1. Sube el proyecto a tu repositorio con rama `main`.
 2. En **Settings → Secrets and variables → Actions**, crea los secretos
@@ -18,15 +57,15 @@ duplicado y Ley 14/2013), con alias neutro.
 4. En **Actions → ICPPLUS Monitor → Run workflow**, inicia una comprobación.
 5. En **Actions → Publish dashboard**, consulta la URL del despliegue.
 
-Comprobación programada **cada 5 minutos, las 24 horas, todos los días**
-(`*/5 * * * *`). Está en `.github/workflows/monitor.yml`.
-GitHub puede retrasar ejecuciones: el intervalo no está garantizado.
-El panel recarga resultados cada minuto;
-esto no inicia otra comprobación.
+La comprobación automática se ha trasladado a Windows. El workflow
+`.github/workflows/monitor.yml` queda disponible solo para ejecución manual,
+sin un segundo monitor automático en Azure. El panel recarga resultados
+cada minuto; esto no inicia otra comprobación del portal.
 
-El [diagnóstico de conexión](docs/connection-diagnosis.md) documenta un
-timeout al establecer TCP desde Azure al puerto 443 del portal. La consulta
-de disponibilidad sigue pendiente mientras no haya conectividad desde el runner.
+El [diagnóstico de conexión](docs/connection-diagnosis.md) documenta el
+timeout TCP desde Azure y la prueba local que consiguió consultar la
+disponibilidad. El portal puede rechazar sesiones: estos casos se muestran
+como `blocked` y no como ausencia de citas.
 
 El panel público incluye `Perfil 1`, provincia, trámite, estado y hora.
 Excluye identidad, registros y enlaces de sesión. Los archivos e historial
@@ -47,8 +86,8 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m http.server 8000 --bind 127.0.0.1 --directory _site
 ```
 
-Abre http://127.0.0.1:8000. El monitor comprueba una vez; GitHub Actions lo
-repite en la nube. `.env`, el entorno virtual y los diagnósticos se excluyen
+Abre http://127.0.0.1:8000. El monitor comprueba una vez; la tarea de Windows
+lo repite en la instalación local. `.env`, el entorno virtual y los diagnósticos se excluyen
 de Git. Selenium obtiene el controlador compatible con Chrome.
 En entornos restringidos configura `SE_CACHE_PATH`, `TEMP` y `TMP` hacia
 carpetas locales con permiso de escritura.
@@ -67,7 +106,7 @@ se ha podido validar desde GitHub por el fallo de conexión.
 - `requires_input`: faltan secretos de identificación del solicitante.
 - `error`: fallo del navegador, selector o flujo; disponibilidad desconocida.
 
-El flujo usa la entrada vigente `/icpplustiem/index.html`: provincia, trámite,
+El flujo comienza en `/icpplus/index.html`: provincia, trámite,
 presentación sin Cl@ve e identificación mediante secretos. Solo pulsa
 «Solicitar Cita» para consultar la disponibilidad, sin elegir fecha ni reservar.
 Si exige CAPTCHA o SMS, requiere intervención manual.

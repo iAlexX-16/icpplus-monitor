@@ -15,7 +15,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException, WebDriverException
 
 
-URL = "https://icp.administracionelectronica.gob.es/icpplustiem/index.html"
+URL = "https://icp.administracionelectronica.gob.es/icpplus/index.html"
 
 
 def public_url(url):

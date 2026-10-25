@@ -9,4 +9,5 @@ official-entry.html
 *.log
 _site/
 _diagnostics/
+.local/
 

@@ -30,7 +30,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 
-BASE_URL = "https://icp.administracionelectronica.gob.es/icpplustiem/index.html"
+BASE_URL = "https://icp.administracionelectronica.gob.es/icpplus/index.html"
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 PROFILES_FILE = os.path.join(DATA_DIR, "profiles.json")
@@ -91,11 +91,15 @@ def human_delay(a: float = 0.4, b: float = 1.0) -> None:
 def build_driver() -> webdriver.Chrome:
     options = Options()
     options.page_load_strategy = "eager"
-    options.add_argument("--headless=new")
+    if os.environ.get("ICP_HEADLESS", "1").lower() not in ("0", "false", "no"):
+        options.add_argument("--headless=new")
     options.add_argument("--window-size=1280,900")
     options.add_argument("--lang=es-ES")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    if os.name != "nt":
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+    if os.environ.get("ICP_BROWSER_PROFILE"):
+        options.add_argument("--user-data-dir=" + os.path.abspath(os.environ["ICP_BROWSER_PROFILE"]))
     if os.environ.get("CHROME_BINARY"):
         options.binary_location = os.environ["CHROME_BINARY"]
     driver_path = os.environ.get("CHROMEDRIVER_PATH")
@@ -189,6 +193,14 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
         except TimeoutException:
             continue
 
+    # Render the form again after its initial cookie has been established.
+    # Old URL-rewritten session IDs can otherwise be carried into a different app context.
+    if driver.find_elements(By.CSS_SELECTOR, "form[action*=';jsessionid=']"):
+        log("Refreshing the initialized session before selecting a province...")
+        driver.refresh()
+        human_delay(2, 4)
+        check_access(driver)
+
     log(f"Selecting province '{profile['province']}'...")
     try:
         province_select = Select(wait_for(driver, By.ID, sel["province_select_id"]))
@@ -234,7 +246,18 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
             button.click()
             human_delay(1, 2)
             break
-    return read_availability(driver, profile, log)
+    result = read_availability(driver, profile, log)
+    if os.environ.get("ICP_BROWSER_PROFILE"):
+        exit_buttons = driver.find_elements(By.XPATH, "//input[@value='Salir'] | //button[normalize-space()='Salir']")
+        for button in exit_buttons:
+            if button.is_displayed():
+                try:
+                    button.click()
+                    log("Ended the checking session.")
+                except WebDriverException:
+                    log("Could not close the session; the check result was retained.")
+                break
+    return result
 
 
 def send_telegram(body: str) -> bool:
@@ -429,8 +452,29 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Check ICPPLUS and send configured alerts.")
+    parser.add_argument("--headed", action="store_true", help="Show Chrome for local checks.")
+    parser.add_argument("--probe-browser", action="store_true", help="Test the initial public page without submitting applicant details.")
     parser.add_argument("--test-telegram", action="store_true", help="Send a Telegram connection test, without checking appointments.")
     args = parser.parse_args()
+    if args.headed:
+        os.environ["ICP_HEADLESS"] = "0"
+    if args.probe_browser:
+        probe_driver = build_driver()
+        try:
+            probe_driver.get(BASE_URL)
+            WebDriverWait(probe_driver, 20).until(
+                lambda driver: driver.find_elements(By.ID, DEFAULT_SELECTORS["province_select_id"])
+                or driver.find_element(By.TAG_NAME, "body").text.strip()
+            )
+            check_access(probe_driver)
+            found = bool(probe_driver.find_elements(By.ID, DEFAULT_SELECTORS["province_select_id"]))
+            print(json.dumps({"page_title": probe_driver.title, "province_select_present": found}))
+            sys.exit(0 if found else 1)
+        except Exception as error:
+            print(json.dumps({"probe_error": type(error).__name__, "message": str(error).split("\n")[0]}))
+            sys.exit(1)
+        finally:
+            probe_driver.quit()
     if args.test_telegram:
         sys.exit(0 if send_telegram("ICPPLUS Monitor: conexión con Telegram verificada.") else 1)
     main()
