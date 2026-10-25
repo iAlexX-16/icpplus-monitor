@@ -304,7 +304,7 @@ def run_profile(profile: dict) -> dict:
     logs = []
 
     def log(msg):
-        for secret in (ICP_NIE, ICP_FULL_NAME, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_PASS):
+        for secret in (ICP_NIE, ICP_FULL_NAME, ICP_NATIONALITY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_PASS):
             if secret:
                 msg = msg.replace(secret, "[redacted]")
         ts = datetime.now(timezone.utc).strftime("%H:%M:%S")

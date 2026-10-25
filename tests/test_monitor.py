@@ -64,10 +64,12 @@ class MonitorTests(unittest.TestCase):
     def test_applicant_secrets_are_redacted_from_error_logs(self):
         profile = {"id": "test", "name": "Alias", "province": "Madrid", "procedure_name": "Huellas"}
         with patch.object(monitor, "ICP_NIE", "PRIVATE_DOCUMENT"), \
-             patch.object(monitor, "build_driver", side_effect=RuntimeError("Failed: PRIVATE_DOCUMENT")), \
+             patch.object(monitor, "ICP_NATIONALITY", "PRIVATE_NATION"), \
+             patch.object(monitor, "build_driver", side_effect=RuntimeError("Failed: PRIVATE_DOCUMENT PRIVATE_NATION")), \
              contextlib.redirect_stdout(io.StringIO()):
             result = monitor.run_profile(profile)
         self.assertNotIn("PRIVATE_DOCUMENT", json.dumps(result))
+        self.assertNotIn("PRIVATE_NATION", json.dumps(result))
 
     def test_telegram_failure_does_not_disclose_token(self):
         output = io.StringIO()
