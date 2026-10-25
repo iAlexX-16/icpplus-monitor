@@ -35,6 +35,8 @@ try {
     $env:TEMP = Join-Path $PSScriptRoot '.cache\tmp'
     $env:TMP = $env:TEMP
     $env:PYTHONIOENCODING = 'utf-8'
+    $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $OutputEncoding
     $env:ICP_BROWSER_PROFILE = Join-Path $directory 'chrome-profile'
     New-Item -ItemType Directory -Force -Path $env:TEMP | Out-Null
     $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'

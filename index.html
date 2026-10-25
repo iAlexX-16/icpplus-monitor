@@ -89,7 +89,7 @@
 <div class="wrap">
   <header>
     <h1>ICPPLUS Monitor</h1>
-    <div class="sub">Live appointment-availability status for each client. Alerts also go to Telegram the moment a slot may be open.</div>
+    <div class="sub">Disponibilidad de citas por perfil. Recibirás avisos por Telegram cuando pueda haber citas.</div>
   </header>
 
   <div class="toprow">
@@ -110,7 +110,7 @@
   </div>
 
   <footer>
-    Checks run via GitHub Actions. This panel reloads the latest saved results every minute.
+    Comprobación local cada 5 minutos con el equipo encendido y la sesión de Windows iniciada. El panel se actualiza cada minuto.
     <br>
     <a href="https://github.com" target="_blank" id="repoLink">View repository</a>
   </footer>
@@ -138,9 +138,9 @@
   function statusLabel(s) {
     switch (s) {
       case 'available': return { cls: 'available', text: 'AVAILABLE!' };
-      case 'unavailable': return { cls: 'unavailable', text: 'No slots' };
+      case 'unavailable': return { cls: 'unavailable', text: 'Sin citas' };
       case 'error': return { cls: 'error', text: 'Error' };
-      case 'blocked': return { cls: 'error', text: 'Access blocked' };
+      case 'blocked': return { cls: 'error', text: 'Acceso bloqueado' };
       case 'requires_input': return { cls: 'pending', text: 'Applicant details required' };
       default: return { cls: 'pending', text: 'Pending' };
     }

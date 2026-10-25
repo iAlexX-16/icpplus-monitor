@@ -72,6 +72,12 @@ formulario si contiene identificadores de sesión en la URL y se termina
 la sesión mediante `Salir` cuando el portal ofrece esa opción. Nunca se
 selecciona una fecha ni se confirma una reserva.
 
+La validación final desde el Programador de tareas, a las 02:04:35 UTC,
+completó de nuevo la consulta y encontró ausencia de citas. La tarea terminó
+con código 0, publicó el resultado anonimizado en GitHub y el panel reflejó
+ese estado. La tarea está habilitada con repetición `PT5M` y evita instancias
+simultáneas. Telegram también se verificó desde la configuración local cifrada.
+
 El diagnóstico puede repetirse en Actions, con el workflow
 `Diagnose ICPPLUS connection`. Solo hace solicitudes anónimas acotadas y
 el informe elimina parámetros y sesiones de las URL.
