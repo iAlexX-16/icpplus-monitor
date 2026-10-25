@@ -24,6 +24,10 @@ GitHub puede retrasar ejecuciones: el intervalo no está garantizado.
 El panel recarga resultados cada minuto;
 esto no inicia otra comprobación.
 
+El [diagnóstico de conexión](docs/connection-diagnosis.md) documenta un
+timeout al establecer TCP desde Azure al puerto 443 del portal. La consulta
+de disponibilidad sigue pendiente mientras no haya conectividad desde el runner.
+
 El panel público incluye `Perfil 1`, provincia, trámite, estado y hora.
 Excluye identidad, registros y enlaces de sesión. Los archivos e historial
 de un repositorio público también son públicos: usa siempre alias neutros.
@@ -53,8 +57,9 @@ carpetas locales con permiso de escritura.
 
 Edita `data/profiles.json`: `id` único, `name` (alias), `province` y
 `procedure_name` con el texto exacto del desplegable. `enabled: false` pausa
-un perfil; `selectors` permite ajustar selectores. El trámite no ha podido
-validarse mientras el portal esté bloqueado.
+un perfil; `selectors` permite ajustar selectores. El texto del trámite de
+Madrid se contrastó con el desplegable oficial; la consulta completa aún no
+se ha podido validar desde GitHub por el fallo de conexión.
 
 - `available`: se encontró el calendario; se avisa de posible disponibilidad.
 - `unavailable`: hay un mensaje explícito de que no hay citas.
