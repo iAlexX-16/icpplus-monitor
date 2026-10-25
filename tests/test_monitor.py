@@ -16,7 +16,7 @@ class MonitorTests(unittest.TestCase):
         driver = Mock(title="403 Forbidden")
         driver.find_element.return_value.text = "Forbidden"
         driver.find_elements.return_value = []
-        with patch.object(monitor, "human_delay"):
+        with patch.object(monitor, "human_delay"), patch.object(monitor, "ICP_NIE", ""):
             with self.assertRaises(monitor.AccessBlockedError):
                 monitor.check_appointments(driver, {}, Mock())
 
@@ -28,6 +28,15 @@ class MonitorTests(unittest.TestCase):
         with patch.object(monitor, "wait_for", side_effect=monitor.TimeoutException()):
             with self.assertRaisesRegex(RuntimeError, "Availability could not be determined"):
                 monitor.read_availability(driver, profile, Mock())
+
+    def test_invalid_nie_stops_before_contacting_official_site(self):
+        driver = Mock()
+        with patch.object(monitor, "ICP_NIE", "X1234567A"):
+            with self.assertRaises(monitor.ApplicantDetailsRequiredError):
+                monitor.check_appointments(driver, {}, Mock())
+        driver.get.assert_not_called()
+        self.assertTrue(monitor.valid_nie("X1234567L"))
+        self.assertFalse(monitor.valid_nie("invalid"))
 
     def test_network_firewall_is_reported_as_blocked(self):
         driver = Mock(title="Intrusion Prevention Violation")

@@ -75,12 +75,21 @@ class ApplicantDetailsRequiredError(RuntimeError):
     pass
 
 
+def valid_nie(value: str) -> bool:
+    value = value.strip().upper()
+    if len(value) != 9 or value[0] not in "XYZ" or not value[1:8].isascii() or not value[1:8].isdigit():
+        return False
+    number = str("XYZ".index(value[0])) + value[1:8]
+    return value[-1] == "TRWAGMYFPDXBNJZSQVHLCKE"[int(number) % 23]
+
+
 def human_delay(a: float = 0.4, b: float = 1.0) -> None:
     time.sleep(random.uniform(a, b))
 
 
 def build_driver() -> webdriver.Chrome:
     options = Options()
+    options.page_load_strategy = "eager"
     options.add_argument("--headless=new")
     options.add_argument("--window-size=1280,900")
     options.add_argument("--lang=es-ES")
@@ -155,6 +164,8 @@ def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
 
 
 def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
+    if ICP_NIE and not valid_nie(ICP_NIE):
+        raise ApplicantDetailsRequiredError("The configured NIE has an invalid check digit. Correct the private ICP_NIE secret.")
     sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
 
     log("Opening ICPPLUS home page...")
