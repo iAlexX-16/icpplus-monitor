@@ -17,7 +17,11 @@ def public_status(status):
     return {
         'last_run': status.get('last_run'),
         'profiles': {
-            key: {'status': value['status'], 'last_check': value.get('last_check'), 'url': BASE_URL}
+            key: {
+                'status': value['status'], 'last_check': value.get('last_check'), 'url': BASE_URL,
+                **{field: value[field] for field in ('target_check_at', 'prepared_at', 'check_requested_at',
+                   'availability_requested_at', 'dispatch_lateness_ms', 'error_kind', 'error_stage') if field in value},
+            }
             for key, value in status.get('profiles', {}).items()
         },
     }

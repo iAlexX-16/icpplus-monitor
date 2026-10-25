@@ -110,7 +110,7 @@
   </div>
 
   <footer>
-    Comprobación local cada 5 minutos con el equipo encendido y la sesión de Windows iniciada. El panel se actualiza cada minuto.
+    Preparación a :14, :29, :44 y :59; consulta a :00, :15, :30 y :45. Requiere el equipo encendido y la sesión de Windows iniciada.
     <br>
     <a href="https://github.com" target="_blank" id="repoLink">View repository</a>
   </footer>
@@ -141,6 +141,7 @@
       case 'unavailable': return { cls: 'unavailable', text: 'Sin citas' };
       case 'error': return { cls: 'error', text: 'Error' };
       case 'blocked': return { cls: 'error', text: 'Acceso bloqueado' };
+      case 'missed': return { cls: 'error', text: 'Horario perdido' };
       case 'requires_input': return { cls: 'pending', text: 'Applicant details required' };
       default: return { cls: 'pending', text: 'Pending' };
     }
@@ -179,7 +180,7 @@
             card.classList.add('available');
             alerts.push({ name: profile.name, url: result.url });
           }
-          if (['error', 'blocked'].includes(result.status)) card.classList.add('error');
+          if (['error', 'blocked', 'missed'].includes(result.status)) card.classList.add('error');
         } else {
           badgeInfo = statusLabel(null);
         }
@@ -199,6 +200,34 @@
           <div class="meta"><b>Last checked:</b> ${result ? fmtTime(result.last_check) : '—'}</div>
         `;
         card.appendChild(meta);
+
+        if (result && result.error_kind === 'request_rejected') {
+          const error = document.createElement('div');
+          error.className = 'meta';
+          error.textContent = 'El portal rechazó la petición' + (result.error_stage ? ' (' + result.error_stage + ')' : '') + '. Disponibilidad desconocida.';
+          card.appendChild(error);
+        }
+
+        if (result && result.target_check_at) {
+          const planned = document.createElement('div');
+          planned.className = 'meta';
+          planned.textContent = 'Consulta prevista: ' + fmtTime(result.target_check_at);
+          card.appendChild(planned);
+          if (result.check_requested_at) {
+            const requested = document.createElement('div');
+            requested.className = 'meta';
+            const date = new Date(result.check_requested_at);
+            requested.textContent = 'Inicio de consulta: ' + date.toLocaleTimeString() + '.' + String(date.getMilliseconds()).padStart(3, '0');
+            card.appendChild(requested);
+          }
+          if (result.availability_requested_at) {
+            const availability = document.createElement('div');
+            availability.className = 'meta';
+            const date = new Date(result.availability_requested_at);
+            availability.textContent = 'Petición de citas: ' + date.toLocaleTimeString() + '.' + String(date.getMilliseconds()).padStart(3, '0');
+            card.appendChild(availability);
+          }
+        }
 
         if (result && result.status === 'available' && result.url) {
           const link = document.createElement('a');

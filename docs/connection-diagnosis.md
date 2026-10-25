@@ -43,7 +43,7 @@ La prueba posterior sigue mostrando el fallo de conectividad.
 
 ## Funcionamiento configurado
 
-El monitor se trasladó a una tarea de Windows cada cinco minutos. La
+El monitor se trasladó a una tarea de Windows cada quince minutos. La
 ejecución automática de Azure se desactivó para no duplicar comprobaciones.
 El equipo debe permanecer encendido, despierto y con la sesión iniciada.
 
@@ -75,8 +75,31 @@ selecciona una fecha ni se confirma una reserva.
 La validación final desde el Programador de tareas, a las 02:04:35 UTC,
 completó de nuevo la consulta y encontró ausencia de citas. La tarea terminó
 con código 0, publicó el resultado anonimizado en GitHub y el panel reflejó
-ese estado. La tarea está habilitada con repetición `PT5M` y evita instancias
+ese estado. La tarea está habilitada con repetición `PT15M` y evita instancias
 simultáneas. Telegram también se verificó desde la configuración local cifrada.
+
+## Revisión de horario y acceso denegado
+
+La revisión posterior del registro encontró 147 consultas completas de
+ausencia de citas y un `Request Rejected` a las 15:18 (Europe/Madrid), tras
+seleccionar provincia. El rechazo corresponde al portal; no hay un error
+de permisos de Windows en ese registro. La siguiente consulta a las 15:23
+volvió a completarse. Sin registros del servidor no se puede atribuir con
+certeza el rechazo a una regla concreta; no implica un bloqueo permanente.
+
+Se corrigió que un rechazo pudiera terminar con código 0. Ahora una consulta
+fallida conserva y publica su estado de error y termina con código no cero.
+Antes de enviar datos de identidad se permite un único reinicio de la sesión
+del perfil exclusivo del monitor, si aún quedan al menos 35 segundos hasta
+el objetivo. No se reintenta CAPTCHA ni un 403.
+
+La tarea prepara a :14, :29, :44 y :59 y espera al próximo cuarto de hora.
+En la prueba real de las 15:30, quedó preparada a las 15:29:33.792, inició
+el envío a las 15:30:00.000 y envió la petición posterior de disponibilidad
+a las 15:30:00.212. El portal respondió explícitamente que no había citas.
+Estos tiempos son del ordenador, no una garantía del instante de procesado
+en el servidor. Si se pierde el objetivo por más de un segundo, no se consulta
+fuera de plazo.
 
 El diagnóstico puede repetirse en Actions, con el workflow
 `Diagnose ICPPLUS connection`. Solo hace solicitudes anónimas acotadas y

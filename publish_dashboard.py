@@ -25,6 +25,8 @@ def build_public_dashboard(root: Path, output: Path) -> None:
                 "status": result["status"],
                 "last_check": result.get("last_check"),
                 "url": "https://icp.administracionelectronica.gob.es/icpplus/index.html",
+                **{field: result[field] for field in ('target_check_at', 'prepared_at', 'check_requested_at',
+                   'availability_requested_at', 'dispatch_lateness_ms', 'error_kind', 'error_stage') if field in result},
             }
     (output / "data").mkdir(parents=True, exist_ok=True)
     copyfile(root / "index.html", output / "index.html")

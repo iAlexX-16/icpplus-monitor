@@ -3,14 +3,23 @@
 Monitor de citas de extranjería con Chrome, avisos por Telegram y panel en
 GitHub Pages. Configurado para Madrid, toma de huellas (inicial, renovación,
 duplicado y Ley 14/2013), con alias neutro. Las comprobaciones automáticas se
-ejecutan en Windows cada cinco minutos, usando un perfil propio de Chrome.
+ejecutan en Windows cada quince minutos, usando un perfil propio de Chrome.
 
 ## Ejecución automática en Windows
 
-La tarea **ICPPLUS Monitor (local)** ejecuta `local_runner.ps1` cada cinco
-minutos. El usuario debe mantener la sesión de Windows iniciada y el equipo
+La tarea **ICPPLUS Monitor (local)** ejecuta `local_runner.ps1 -QuarterHour`
+a los minutos **:14, :29, :44 y :59**. Prepara la sesión y el formulario,
+y retiene el envío hasta **:00, :15, :30 o :45**. El usuario debe mantener la sesión de Windows iniciada y el equipo
 encendido, despierto y conectado a Internet. Chrome se muestra durante cada
 comprobación y se cierra al terminar. No se necesita una ventana de terminal.
+
+El objetivo controla la hora de envío desde el ordenador; la respuesta y
+los pasos adicionales del servidor pueden llegar después. El resultado
+incluye la hora prevista, la preparación, el inicio de consulta y, si hace
+falta una segunda petición, la hora de esa petición de disponibilidad.
+Una preparación retrasada más de un segundo no envía una consulta tardía:
+queda como `missed`. Una ejecución iniciada fuera del minuto de preparación
+se omite. La sincronización horaria admite un único perfil activo.
 
 Los secretos locales se guardan cifrados con DPAPI para el usuario de Windows
 actual en `.local/secrets.json`. El perfil `.local/chrome-profile` es exclusivo
@@ -35,6 +44,13 @@ El log local está en `.local/monitor.log`; el resultado, en `data/status.json`.
 `publish_local_status.py` publica únicamente estado, hora y un enlace público,
 sin datos de identidad, registros ni enlaces de sesión. GitHub Pages se
 actualiza al recibir esos resultados. Las ejecuciones locales no se solapan.
+
+Un rechazo del portal durante la preparación admite un único reinicio de
+sesión, solo si quedan al menos 35 segundos antes del objetivo. CAPTCHA,
+403 y fallos posteriores al envío de identidad no se reintentan. Las
+consultas fallidas se publican con su estado real y terminan con error,
+en lugar de devolver código 0. Los resultados antiguos no se republican
+cuando una ejecución no genera un nuevo estado.
 
 Para pausar o reactivar la tarea:
 
@@ -104,6 +120,7 @@ se ha podido validar desde GitHub por el fallo de conexión.
 - `unavailable`: hay un mensaje explícito de que no hay citas.
 - `blocked`: el portal rechaza el acceso o exige CAPTCHA; disponibilidad desconocida.
 - `requires_input`: faltan secretos de identificación del solicitante.
+- `missed`: no se completó la preparación antes del objetivo y no se envió una consulta fuera de plazo.
 - `error`: fallo del navegador, selector o flujo; disponibilidad desconocida.
 
 El flujo comienza en `/icpplus/index.html`: provincia, trámite,

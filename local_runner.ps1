@@ -1,7 +1,8 @@
 param(
     [switch]$Probe,
     [switch]$TestTelegram,
-    [switch]$NoPublish
+    [switch]$NoPublish,
+    [switch]$QuarterHour
 )
 
 $ErrorActionPreference = 'Stop'
@@ -42,17 +43,24 @@ try {
     $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
     Add-Content -LiteralPath $log -Value ("`n=== Local check: " + (Get-Date -Format o) + ' ===') -Encoding UTF8
     $arguments = @('-u', 'monitor.py', '--headed')
+    if ($QuarterHour) { $arguments += '--quarter-hour' }
     if ($Probe) { $arguments += '--probe-browser' }
     if ($TestTelegram) { $arguments += '--test-telegram' }
+    $runStarted = [DateTimeOffset]::UtcNow
     & $python @arguments 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
     $result = $LASTEXITCODE
-    if ($result -ne 0) { throw "Monitor process exited with code $result. See .local/monitor.log." }
+    if (($Probe -or $TestTelegram) -and $result -ne 0) { throw "Monitor process exited with code $result. See .local/monitor.log." }
     if (-not $Probe -and -not $TestTelegram) {
+        $status = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'data\status.json') -Raw | ConvertFrom-Json
+        if ([DateTimeOffset]::Parse($status.last_run) -lt $runStarted.AddSeconds(-2)) {
+            throw 'This execution did not produce a new result; the old status was not republished.'
+        }
         & $python publish_dashboard.py 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
         if (-not $NoPublish) {
             & $python publish_local_status.py 2>&1 | Out-File -FilePath $log -Append -Encoding utf8
             if ($LASTEXITCODE -ne 0) { throw 'The local check finished, but the web status could not be published.' }
         }
+        if ($result -ne 0) { throw "The portal check did not complete (code $result). Its failure status was published. See .local/monitor.log." }
     }
     Write-Output 'Local run completed. Details: .local/monitor.log'
 } catch {

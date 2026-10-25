@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from dotenv import load_dotenv
+from quarter_schedule import CheckTimingError, target_for_preparation, wait_until
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -69,7 +70,10 @@ ICP_NATIONALITY = os.environ.get("ICP_NATIONALITY", "")
 
 
 class AccessBlockedError(RuntimeError):
-    pass
+    def __init__(self, message, reason='access_blocked', stage='unknown'):
+        super().__init__(message)
+        self.reason = reason
+        self.stage = stage
 
 
 class ApplicantDetailsRequiredError(RuntimeError):
@@ -139,20 +143,20 @@ def save_debug_screenshot(driver, log) -> None:
         log(f"Could not save debug page source: {e}")
 
 
-def check_access(driver) -> None:
+def check_access(driver, stage='unknown') -> None:
     text = driver.find_element(By.TAG_NAME, "body").text.lower()
     title = driver.title.lower()
     if "403 forbidden" in title or "you don't have permission to access" in text:
-        raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.")
+        raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.", 'http_forbidden', stage)
     if "request rejected" in title or "requested url was rejected" in text:
-        raise AccessBlockedError("ICPPLUS rejected the request; availability could not be checked.")
+        raise AccessBlockedError(f"ICPPLUS rejected the request at stage '{stage}'; availability could not be checked.", 'request_rejected', stage)
     if "intrusion prevention" in title or "blocked by intrusion prevention" in text:
-        raise AccessBlockedError("Network intrusion prevention blocked access; availability could not be checked.")
+        raise AccessBlockedError("Network intrusion prevention blocked access; availability could not be checked.", 'network_filter', stage)
     if not text.strip():
-        raise AccessBlockedError("ICPPLUS returned an empty page; availability could not be checked.")
+        raise AccessBlockedError("ICPPLUS returned an empty page; availability could not be checked.", 'empty_page', stage)
     challenges = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='recaptcha'], iframe[src*='hcaptcha'], input[name='captcha']")
     if any(element.is_displayed() for element in challenges):
-        raise AccessBlockedError("Manual CAPTCHA required; availability could not be checked.")
+        raise AccessBlockedError("Manual CAPTCHA required; availability could not be checked.", 'captcha', stage)
 
 
 def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
@@ -171,7 +175,7 @@ def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
         raise RuntimeError("No availability message or calendar found. Availability could not be determined.")
 
 
-def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
+def prepare_check(driver, profile: dict, log):
     if ICP_NIE and not valid_nie(ICP_NIE):
         raise ApplicantDetailsRequiredError("The configured NIE has an invalid check digit. Correct the private ICP_NIE secret.")
     sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
@@ -179,7 +183,7 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
     log("Opening ICPPLUS home page...")
     driver.get(BASE_URL)
     human_delay(2, 4)
-    check_access(driver)
+    check_access(driver, 'inicio')
 
     for cookie_xpath in [
         sel["cookie_accept_xpath"],
@@ -199,7 +203,7 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
         log("Refreshing the initialized session before selecting a province...")
         driver.refresh()
         human_delay(2, 4)
-        check_access(driver)
+        check_access(driver, 'inicio')
 
     log(f"Selecting province '{profile['province']}'...")
     try:
@@ -213,7 +217,7 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
     wait_and_click(driver, By.ID, sel["province_submit_id"])
     human_delay(2, 4)
 
-    check_access(driver)
+    check_access(driver, 'provincia')
 
     log(f"Selecting procedure '{profile['procedure_name']}'...")
     tramite_select = Select(wait_for(driver, By.ID, sel["tramite_select_id"]))
@@ -221,30 +225,71 @@ def check_appointments(driver, profile: dict, log) -> tuple[bool, str]:
     human_delay()
     wait_and_click(driver, By.ID, sel["tramite_submit_id"])
     human_delay(2, 4)
-    check_access(driver)
+    check_access(driver, 'trámite')
 
     log("Opening presentation without Cl@ve...")
     wait_and_click(driver, By.ID, sel["no_cert_id"])
     human_delay(1, 2)
-    check_access(driver)
+    check_access(driver, 'identificación')
 
     if driver.find_elements(By.ID, "txtIdCitado"):
         if not all((ICP_NIE, ICP_FULL_NAME, ICP_NATIONALITY)):
             raise ApplicantDetailsRequiredError("Applicant details required: configure ICP_NIE, ICP_FULL_NAME and ICP_NATIONALITY as secrets.")
-        log("Identifying the applicant using private configuration...")
+        log("Preparing applicant identification using private configuration...")
         wait_for(driver, By.ID, "txtIdCitado").send_keys(ICP_NIE)
         wait_for(driver, By.ID, "txtDesCitado").send_keys(ICP_FULL_NAME)
         Select(wait_for(driver, By.ID, "txtPaisNac")).select_by_visible_text(ICP_NATIONALITY)
-        wait_and_click(driver, By.ID, "btnEnviar")
-        human_delay(1, 2)
-        check_access(driver)
+        button = WebDriverWait(driver, 20).until(EC.element_to_be_clickable((By.ID, 'btnEnviar')))
+        return button, True
 
-    # This button only opens availability; no date, office or reservation is submitted.
     request_buttons = driver.find_elements(By.XPATH, "//input[@value='Solicitar Cita' or @value='Solicitar cita'] | //button[normalize-space()='Solicitar Cita' or normalize-space()='Solicitar cita']")
     for button in request_buttons:
+        if button.is_displayed() and button.is_enabled():
+            return button, False
+    raise RuntimeError('The portal did not show an identification or availability request button.')
+
+
+def check_appointments(driver, profile: dict, log, check_at=None, timing=None) -> tuple[bool, str]:
+    timing = timing if timing is not None else {}
+    if check_at:
+        timing['target_check_at'] = check_at.isoformat(timespec='milliseconds')
+    for attempt in range(2):
+        try:
+            button, identification = prepare_check(driver, profile, log)
+            break
+        except AccessBlockedError as error:
+            remaining = (check_at - datetime.now(timezone.utc)).total_seconds() if check_at else float('inf')
+            retry_allowed = (attempt == 0 and error.reason == 'request_rejected'
+                             and error.stage in ('inicio', 'provincia', 'trámite', 'identificación')
+                             and remaining >= 35)
+            if not retry_allowed:
+                raise
+            log(f"Portal rejected preparation at '{error.stage}'. Restarting the monitor session once.")
+            if os.environ.get('ICP_BROWSER_PROFILE'):
+                driver.delete_all_cookies()
+            human_delay(3, 4)
+
+    prepared_at = datetime.now(timezone.utc)
+    timing['prepared_at'] = prepared_at.isoformat(timespec='milliseconds')
+    if check_at:
+        log(f"Prepared. Waiting for {check_at.astimezone().isoformat(timespec='seconds')} before submitting the availability check.")
+        requested_at = wait_until(check_at)
+    else:
+        requested_at = datetime.now(timezone.utc)
+    timing['check_requested_at'] = requested_at.isoformat(timespec='milliseconds')
+    if check_at:
+        timing['dispatch_lateness_ms'] = round((requested_at - check_at).total_seconds() * 1000)
+    log(f"Submitting the check at {requested_at.astimezone().isoformat(timespec='milliseconds')}.")
+    button.click()
+    check_access(driver, 'respuesta de identidad' if identification else 'respuesta de disponibilidad')
+
+    # This button only opens availability; no date, office or reservation is submitted.
+    request_buttons = driver.find_elements(By.XPATH, "//input[@value='Solicitar Cita' or @value='Solicitar cita'] | //button[normalize-space()='Solicitar Cita' or normalize-space()='Solicitar cita']") if identification else []
+    for button in request_buttons:
         if button.is_displayed():
+            timing['availability_requested_at'] = datetime.now(timezone.utc).isoformat(timespec='milliseconds')
+            log('Opening the availability response after identification.')
             button.click()
-            human_delay(1, 2)
             break
     result = read_availability(driver, profile, log)
     if os.environ.get("ICP_BROWSER_PROFILE"):
@@ -327,8 +372,9 @@ def save_status(status: dict) -> None:
         json.dump(status, f, indent=2, ensure_ascii=False)
 
 
-def run_profile(profile: dict) -> dict:
+def run_profile(profile: dict, check_at=None) -> dict:
     logs = []
+    timing = {'target_check_at': check_at.isoformat(timespec='milliseconds')} if check_at else {}
 
     def log(msg):
         for secret in (ICP_NIE, ICP_FULL_NAME, ICP_NATIONALITY, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SMTP_PASS):
@@ -345,7 +391,7 @@ def run_profile(profile: dict) -> dict:
         browser_version = driver.capabilities.get("browserVersion", "unknown")
         driver_version = driver.capabilities.get("chrome", {}).get("chromedriverVersion", "unknown").split(" ")[0]
         log(f"Chrome {browser_version}; ChromeDriver {driver_version}.")
-        available, url = check_appointments(driver, profile, log)
+        available, url = check_appointments(driver, profile, log, check_at=check_at, timing=timing)
         return {
             "name": profile["name"],
             "province": profile["province"],
@@ -354,18 +400,22 @@ def run_profile(profile: dict) -> dict:
             "url": url,
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],
+            **timing,
         }
-    except (AccessBlockedError, ApplicantDetailsRequiredError) as e:
+    except (AccessBlockedError, ApplicantDetailsRequiredError, CheckTimingError) as e:
         log(str(e))
         save_debug_screenshot(driver, log)
         return {
             "name": profile["name"],
             "province": profile["province"],
             "procedure_name": profile["procedure_name"],
-            "status": "requires_input" if isinstance(e, ApplicantDetailsRequiredError) else "blocked",
+            "status": "missed" if isinstance(e, CheckTimingError) else "requires_input" if isinstance(e, ApplicantDetailsRequiredError) else "blocked",
+            "error_kind": e.reason if isinstance(e, AccessBlockedError) else type(e).__name__,
+            "error_stage": e.stage if isinstance(e, AccessBlockedError) else None,
             "url": BASE_URL,
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],
+            **timing,
         }
     except WebDriverException as e:
         log(f"Browser/WebDriver error: {e}")
@@ -378,6 +428,7 @@ def run_profile(profile: dict) -> dict:
             "url": None,
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],
+            **timing,
         }
     except Exception as e:
         log(f"Unexpected error: {e}")
@@ -390,6 +441,7 @@ def run_profile(profile: dict) -> dict:
             "url": None,
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],
+            **timing,
         }
     finally:
         if driver is not None:
@@ -399,18 +451,20 @@ def run_profile(profile: dict) -> dict:
                 pass
 
 
-def main():
+def main(check_at=None):
     profiles = load_profiles()
     status = load_status()
     status.setdefault("profiles", {})
     active_ids = {profile["id"] for profile in profiles}
     status["profiles"] = {key: value for key, value in status["profiles"].items() if key in active_ids}
+    if check_at and sum(profile.get('enabled', True) for profile in profiles) > 1:
+        raise ValueError('Quarter-hour checks currently support one enabled profile.')
 
     if not profiles:
         print("No profiles configured in data/profiles.json - nothing to do.")
         status["last_run"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         save_status(status)
-        return
+        return 0
 
     any_available = False
 
@@ -420,7 +474,7 @@ def main():
             continue
 
         print(f"=== Checking profile: {profile['name']} ===")
-        result = run_profile(profile)
+        result = run_profile(profile, check_at=check_at)
         status["profiles"][profile["id"]] = result
 
         if result["status"] == "available":
@@ -448,11 +502,16 @@ def main():
         print("\n*** AT LEAST ONE PROFILE HAS POSSIBLE SLOTS ***")
     else:
         print("\nNo confirmed availability in this run. Check each profile's status for access errors.")
+    return 2 if any(status['profiles'].get(p['id'], {}).get('status') not in ('available', 'unavailable')
+                    for p in profiles if p.get('enabled', True)) else 0
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Check ICPPLUS and send configured alerts.")
     parser.add_argument("--headed", action="store_true", help="Show Chrome for local checks.")
+    schedule_group = parser.add_mutually_exclusive_group()
+    schedule_group.add_argument('--quarter-hour', action='store_true', help='Prepare during the minute before a quarter hour and submit at the boundary.')
+    schedule_group.add_argument('--check-at', help='Explicit timezone-aware ISO target for a one-time timed check.')
     parser.add_argument("--probe-browser", action="store_true", help="Test the initial public page without submitting applicant details.")
     parser.add_argument("--test-telegram", action="store_true", help="Send a Telegram connection test, without checking appointments.")
     args = parser.parse_args()
@@ -477,4 +536,10 @@ if __name__ == "__main__":
             probe_driver.quit()
     if args.test_telegram:
         sys.exit(0 if send_telegram("ICPPLUS Monitor: conexión con Telegram verificada.") else 1)
-    main()
+    try:
+        check_at = target_for_preparation(datetime.now(timezone.utc)) if args.quarter_hour else datetime.fromisoformat(args.check_at) if args.check_at else None
+        if check_at is not None and check_at.tzinfo is None:
+            parser.error('--check-at must include its timezone offset.')
+    except CheckTimingError as error:
+        parser.exit(3, str(error) + '\n')
+    sys.exit(main(check_at=check_at))
