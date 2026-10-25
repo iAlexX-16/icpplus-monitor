@@ -6,13 +6,13 @@
       "procedure_name": "POLICÍA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013",
       "status": "error",
       "url": null,
-      "last_check": "2026-10-25T00:07:24+00:00",
+      "last_check": "2026-10-25T00:10:05+00:00",
       "logs": [
-        "[00:06:24] Opening ICPPLUS home page...",
-        "[00:07:24] Browser/WebDriver error: Message: timeout: Timed out receiving message from renderer: -0.002\n  (Session info: chrome=155.0.8059.39)\nStacktrace:\n#0 0x55ecc43bd1da <unknown>\n#1 0x55ecc3cdc5c9 <unknown>\n#2 0x55ecc3cc3fba <unknown>\n#3 0x55ecc3cc3c36 <unknown>\n#4 0x55ecc3cc1840 <unknown>\n#5 0x55ecc3cc21af <unknown>\n#6 0x55ecc3cd13a0 <unknown>\n#7 0x55ecc3ceb3c6 <unknown>\n#8 0x55ecc3cf2f3b <unknown>\n#9 0x55ecc3cc2909 <unknown>\n#10 0x55ecc3ceb124 <unknown>\n#11 0x55ecc3d81c31 <unknown>\n#12 0x55ecc3d262f8 <unknown>\n#13 0x55ecc3d270d1 <unknown>\n#14 0x55ecc437fcec <unknown>\n#15 0x55ecc437e505 <unknown>\n#16 0x55ecc43693b5 <unknown>\n#17 0x55ecc437f15a <unknown>\n#18 0x55ecc4351939 <unknown>\n#19 0x55ecc43a7898 <unknown>\n#20 0x55ecc43a7a35 <unknown>\n#21 0x55ecc43bbb63 <unknown>\n#22 0x7f990249cb84 <unknown>\n#23 0x7f9902529ecc <unknown>\n",
-        "[00:07:24] Page diagnostics omitted because applicant details are configured."
+        "[00:09:05] Opening ICPPLUS home page...",
+        "[00:10:05] Browser/WebDriver error: Message: timeout: Timed out receiving message from renderer: -0.002\n  (Session info: chrome=155.0.8059.39)\nStacktrace:\n#0 0x5651d9c901da <unknown>\n#1 0x5651d95af5c9 <unknown>\n#2 0x5651d9596fba <unknown>\n#3 0x5651d9596c36 <unknown>\n#4 0x5651d9594840 <unknown>\n#5 0x5651d95951af <unknown>\n#6 0x5651d95a43a0 <unknown>\n#7 0x5651d95be3c6 <unknown>\n#8 0x5651d95c5f3b <unknown>\n#9 0x5651d9595909 <unknown>\n#10 0x5651d95be124 <unknown>\n#11 0x5651d9654c31 <unknown>\n#12 0x5651d95f92f8 <unknown>\n#13 0x5651d95fa0d1 <unknown>\n#14 0x5651d9c52cec <unknown>\n#15 0x5651d9c51505 <unknown>\n#16 0x5651d9c3c3b5 <unknown>\n#17 0x5651d9c5215a <unknown>\n#18 0x5651d9c24939 <unknown>\n#19 0x5651d9c7a898 <unknown>\n#20 0x5651d9c7aa35 <unknown>\n#21 0x5651d9c8eb63 <unknown>\n#22 0x7f4ae2c9cb84 <unknown>\n#23 0x7f4ae2d29ecc <unknown>\n",
+        "[00:10:05] Page diagnostics omitted because applicant details are configured."
       ]
     }
   },
-  "last_run": "2026-10-25T00:07:27+00:00"
+  "last_run": "2026-10-25T00:10:07+00:00"
 }
