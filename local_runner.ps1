@@ -2,11 +2,16 @@ param(
     [switch]$Probe,
     [switch]$TestTelegram,
     [switch]$NoPublish,
-    [switch]$QuarterHour
+    [switch]$QuarterHour,
+    [switch]$FromApp
 )
 
 $ErrorActionPreference = 'Stop'
 $directory = Join-Path $PSScriptRoot '.local'
+if ((Test-Path -LiteralPath (Join-Path $directory 'manual-mode.json')) -and -not $FromApp -and -not $Probe -and -not $TestTelegram) {
+    Write-Error 'El inicio automático está desactivado. Abre ICPPLUS Monitor y pulsa Iniciar.'
+    exit 1
+}
 New-Item -ItemType Directory -Force -Path $directory | Out-Null
 $lock = $null
 try {

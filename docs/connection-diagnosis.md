@@ -43,7 +43,9 @@ La prueba posterior sigue mostrando el fallo de conectividad.
 
 ## Funcionamiento configurado
 
-El monitor se trasladó a una tarea de Windows cada quince minutos. La
+El monitor se trasladó a Windows cada quince minutos. Actualmente solo se
+ejecuta al abrir **ICPPLUS Monitor** y pulsar **Iniciar**; cerrar la ventana
+detiene los procesos de consulta. La tarea de Windows anterior está desactivada. La
 ejecución automática de Azure se desactivó para no duplicar comprobaciones.
 El equipo debe permanecer encendido, despierto y con la sesión iniciada.
 
@@ -75,8 +77,8 @@ selecciona una fecha ni se confirma una reserva.
 La validación final desde el Programador de tareas, a las 02:04:35 UTC,
 completó de nuevo la consulta y encontró ausencia de citas. La tarea terminó
 con código 0, publicó el resultado anonimizado en GitHub y el panel reflejó
-ese estado. La tarea está habilitada con repetición `PT15M` y evita instancias
-simultáneas. Telegram también se verificó desde la configuración local cifrada.
+ese estado. En aquella prueba la tarea estaba habilitada con repetición `PT15M`
+y evitaba instancias simultáneas. Telegram también se verificó desde la configuración local cifrada.
 
 ## Revisión de horario y acceso denegado
 

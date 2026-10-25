@@ -2,16 +2,27 @@
 
 Monitor de citas de extranjería con Chrome, avisos por Telegram y panel en
 GitHub Pages. Configurado para Madrid, toma de huellas (inicial, renovación,
-duplicado y Ley 14/2013), con alias neutro. Las comprobaciones automáticas se
-ejecutan en Windows cada quince minutos, usando un perfil propio de Chrome.
+duplicado y Ley 14/2013), con alias neutro. Las comprobaciones se ejecutan
+en Windows cada quince minutos mientras la aplicación está abierta y se ha
+pulsado **Iniciar**, usando un perfil propio de Chrome.
 
-## Ejecución automática en Windows
+## Aplicación en Windows
 
-La tarea **ICPPLUS Monitor (local)** ejecuta `local_runner.ps1 -QuarterHour`
+Abre **ICPPLUS Monitor** desde el acceso directo del escritorio y pulsa
+**Iniciar**. También puedes abrir `Abrir ICPPLUS Monitor.cmd` en la carpeta
+del proyecto. La ventana muestra el estado y el próximo horario. **Detener**
+cancela las consultas; cerrar la ventana cancela también una consulta en
+curso y cierra el Chrome exclusivo del monitor. Al volver a abrirla, empieza
+detenida y espera a que pulses **Iniciar**.
+
+La aplicación ejecuta `local_runner.ps1 -QuarterHour -FromApp`
 a los minutos **:14, :29, :44 y :59**. Prepara la sesión y el formulario,
 y retiene el envío hasta **:00, :15, :30 o :45**. El usuario debe mantener la sesión de Windows iniciada y el equipo
 encendido, despierto y conectado a Internet. Chrome se muestra durante cada
 comprobación y se cierra al terminar. No se necesita una ventana de terminal.
+La tarea anterior **ICPPLUS Monitor (local)** está desactivada; no se inicia
+con Windows. El modo manual impide que esa tarea siga consultando aunque
+se reactive por error.
 
 El objetivo controla la hora de envío desde el ordenador; la respuesta y
 los pasos adicionales del servidor pueden llegar después. El resultado
@@ -34,10 +45,9 @@ Los valores no deben guardarse en un archivo de código ni en el repositorio.
 ```powershell
 # Inicio de sesión para publicar el panel; se guarda en el Administrador de credenciales.
 git credential-manager github login --username iAlexX-16 --device
-# Primera comprobación y registro de la tarea.
-.\local_runner.ps1
-.\install_local_task.ps1
-Get-ScheduledTaskInfo -TaskName 'ICPPLUS Monitor (local)'
+# Instalar el acceso directo y desactivar la tarea automática anterior.
+.\install_manual_app.ps1
+.\'Abrir ICPPLUS Monitor.cmd'
 ```
 
 El log local está en `.local/monitor.log`; el resultado, en `data/status.json`.
@@ -52,12 +62,8 @@ consultas fallidas se publican con su estado real y terminan con error,
 en lugar de devolver código 0. Los resultados antiguos no se republican
 cuando una ejecución no genera un nuevo estado.
 
-Para pausar o reactivar la tarea:
-
-```powershell
-Disable-ScheduledTask -TaskName 'ICPPLUS Monitor (local)'
-Enable-ScheduledTask -TaskName 'ICPPLUS Monitor (local)'
-```
+El instalador antiguo exige ahora `-EnableUnattended` explícitamente para
+volver al modo sin ventana. No se utiliza en la configuración actual.
 
 ## Panel en GitHub Pages y comprobación manual en Actions
 
@@ -73,7 +79,7 @@ Enable-ScheduledTask -TaskName 'ICPPLUS Monitor (local)'
 4. En **Actions → ICPPLUS Monitor → Run workflow**, inicia una comprobación.
 5. En **Actions → Publish dashboard**, consulta la URL del despliegue.
 
-La comprobación automática se ha trasladado a Windows. El workflow
+La comprobación se ha trasladado a la aplicación de Windows. El workflow
 `.github/workflows/monitor.yml` queda disponible solo para ejecución manual,
 sin un segundo monitor automático en Azure. El panel recarga resultados
 cada minuto; esto no inicia otra comprobación del portal.
@@ -102,8 +108,8 @@ Copy-Item .env.example .env
 .\.venv\Scripts\python.exe -m http.server 8000 --bind 127.0.0.1 --directory _site
 ```
 
-Abre http://127.0.0.1:8000. El monitor comprueba una vez; la tarea de Windows
-lo repite en la instalación local. `.env`, el entorno virtual y los diagnósticos se excluyen
+Abre http://127.0.0.1:8000. El comando `monitor.py` comprueba una vez; la aplicación
+lo repite mientras está iniciada. `.env`, el entorno virtual y los diagnósticos se excluyen
 de Git. Selenium obtiene el controlador compatible con Chrome.
 En entornos restringidos configura `SE_CACHE_PATH`, `TEMP` y `TMP` hacia
 carpetas locales con permiso de escritura.

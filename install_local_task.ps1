@@ -1,4 +1,9 @@
+param([switch]$EnableUnattended)
 $ErrorActionPreference = 'Stop'
+if (-not $EnableUnattended) {
+    throw 'El modo actual es manual. Abre ICPPLUS Monitor. Para cambiar expresamente al modo automático usa -EnableUnattended.'
+}
+Remove-Item -LiteralPath (Join-Path $PSScriptRoot '.local\manual-mode.json') -ErrorAction SilentlyContinue
 $taskName = 'ICPPLUS Monitor (local)'
 $runner = Join-Path $PSScriptRoot 'local_runner.ps1'
 $powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
