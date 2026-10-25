@@ -4,17 +4,15 @@
       "name": "Madrid - Huellas",
       "province": "Madrid",
       "procedure_name": "POLICÍA-TOMA DE HUELLAS (EXPEDICIÓN DE TARJETA) INICIAL, RENOVACIÓN, DUPLICADO Y LEY 14/2013",
-      "status": "blocked",
-      "url": "https://sede.administracionespublicas.gob.es/icpplus/index.html",
-      "last_check": "2026-10-24T23:58:49+00:00",
+      "status": "error",
+      "url": null,
+      "last_check": "2026-10-25T00:07:24+00:00",
       "logs": [
-        "[23:58:44] Opening ICPPLUS home page...",
-        "[23:58:49] ICPPLUS returned 403 Forbidden; availability could not be checked.",
-        "[23:58:49] Saved debug screenshot to debug_screenshot.png",
-        "[23:58:49] Saved debug page source to debug_screenshot.html",
-        "[23:58:49] Current URL at failure: https://sede.administracionespublicas.gob.es/icpplus/index.html"
+        "[00:06:24] Opening ICPPLUS home page...",
+        "[00:07:24] Browser/WebDriver error: Message: timeout: Timed out receiving message from renderer: -0.002\n  (Session info: chrome=155.0.8059.39)\nStacktrace:\n#0 0x55ecc43bd1da <unknown>\n#1 0x55ecc3cdc5c9 <unknown>\n#2 0x55ecc3cc3fba <unknown>\n#3 0x55ecc3cc3c36 <unknown>\n#4 0x55ecc3cc1840 <unknown>\n#5 0x55ecc3cc21af <unknown>\n#6 0x55ecc3cd13a0 <unknown>\n#7 0x55ecc3ceb3c6 <unknown>\n#8 0x55ecc3cf2f3b <unknown>\n#9 0x55ecc3cc2909 <unknown>\n#10 0x55ecc3ceb124 <unknown>\n#11 0x55ecc3d81c31 <unknown>\n#12 0x55ecc3d262f8 <unknown>\n#13 0x55ecc3d270d1 <unknown>\n#14 0x55ecc437fcec <unknown>\n#15 0x55ecc437e505 <unknown>\n#16 0x55ecc43693b5 <unknown>\n#17 0x55ecc437f15a <unknown>\n#18 0x55ecc4351939 <unknown>\n#19 0x55ecc43a7898 <unknown>\n#20 0x55ecc43a7a35 <unknown>\n#21 0x55ecc43bbb63 <unknown>\n#22 0x7f990249cb84 <unknown>\n#23 0x7f9902529ecc <unknown>\n",
+        "[00:07:24] Page diagnostics omitted because applicant details are configured."
       ]
     }
   },
-  "last_run": "2026-10-24T23:58:50+00:00"
+  "last_run": "2026-10-25T00:07:27+00:00"
 }
