@@ -177,3 +177,11 @@ cookies, HTML completo ni texto de la página.
 Las tres pruebas locales con respuesta tardía (ausencia de citas,
 calendario y rechazo) se clasificaron correctamente en unos 0,6 s.
 Pasaron las 38 pruebas unitarias.
+
+La siguiente consulta real, el 26 de octubre a las 02:30 (Europe/Madrid),
+completó el flujo con el lector corregido. El envío de identificación
+comenzó a las 02:30:00.000 y la petición de disponibilidad a las
+02:30:00.282. El portal devolvió un mensaje explícito de ausencia de
+citas, reconocido como `unavailable`. Se verificó ese mismo estado y
+horario en los datos públicos de GitHub Pages. El controlador continuó
+activo y programó la siguiente consulta para las 02:45.
