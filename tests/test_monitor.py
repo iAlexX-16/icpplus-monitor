@@ -51,6 +51,50 @@ class MonitorTests(unittest.TestCase):
         with self.assertRaises(monitor.AccessBlockedError):
             monitor.check_access(driver)
 
+    def test_session_form_is_reloaded_once_and_access_is_checked(self):
+        driver = Mock()
+        driver.find_elements.return_value = [Mock()]
+        with patch.object(monitor, 'human_delay'), patch.object(monitor, 'check_access') as access:
+            monitor.refresh_initialized_form(driver, Mock(), 'provincia', 'selecting a procedure')
+        driver.refresh.assert_called_once()
+        access.assert_called_once_with(driver, 'provincia')
+
+    def test_cookie_initialized_form_is_not_reloaded(self):
+        driver = Mock()
+        driver.find_elements.return_value = []
+        with patch.object(monitor, 'human_delay') as delay:
+            monitor.refresh_initialized_form(driver, Mock(), 'provincia', 'selecting a procedure')
+        driver.refresh.assert_not_called()
+        delay.assert_not_called()
+
+    def test_procedure_session_is_initialized_before_its_selection(self):
+        events = []
+        driver = Mock()
+        driver.find_elements.return_value = [Mock()]
+        profile = {'province': 'Madrid', 'procedure_name': 'Huellas'}
+        def log(message):
+            if message.startswith('Selecting procedure'):
+                events.append('select procedure')
+        def refresh(driver, log, stage, description):
+            events.append(stage)
+        with patch.object(monitor, 'human_delay'), patch.object(monitor, 'check_access'), \
+             patch.object(monitor, 'wait_and_click'), patch.object(monitor, 'Select'), \
+             patch.object(monitor, 'wait_for'), patch.object(monitor, 'ICP_NIE', ''), \
+             patch.object(monitor, 'refresh_initialized_form', side_effect=refresh):
+            with self.assertRaises(monitor.ApplicantDetailsRequiredError):
+                monitor.prepare_check(driver, profile, log)
+        self.assertEqual(events, ['inicio', 'provincia', 'select procedure'])
+
+    def test_rejection_support_id_is_extracted_without_page_contents(self):
+        driver = Mock(title='Request Rejected')
+        driver.find_element.return_value.text = ('The requested URL was rejected. '
+            'Your support ID is: <14917498821336152833> PRIVATE_PAGE_CONTENT')
+        with self.assertRaises(monitor.AccessBlockedError) as caught:
+            monitor.check_access(driver, 'trámite')
+        self.assertEqual(caught.exception.support_id, '14917498821336152833')
+        self.assertNotIn('PRIVATE_PAGE_CONTENT', str(caught.exception))
+        self.assertEqual(caught.exception.stage, 'trámite')
+
     def test_identity_configuration_disables_page_diagnostics(self):
         driver = Mock()
         with patch.object(monitor, "ICP_NIE", "PRIVATE_DOCUMENT"):

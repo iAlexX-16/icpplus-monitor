@@ -106,3 +106,44 @@ fuera de plazo.
 El diagnóstico puede repetirse en Actions, con el workflow
 `Diagnose ICPPLUS connection`. Solo hace solicitudes anónimas acotadas y
 el informe elimina parámetros y sesiones de las URL.
+
+## Rechazo de las 02:00 del 26 de octubre de 2026
+
+La preparación comenzó a las 01:59:00 (Europe/Madrid). A las 01:59:30,
+tras aceptar el trámite, el portal rechazó `/icpplustiem/acInfo`. No se
+habían introducido datos del solicitante ni solicitado disponibilidad.
+Quedaban 30 segundos para el objetivo: el mínimo de 35 segundos para un
+único reintento no se cumplía. El estado `blocked` se publicó correctamente.
+Los tiempos entre corchetes del registro anterior estaban en UTC; desde
+esta revisión incluyen la indicación `UTC` para evitar confusiones.
+
+Dos pruebas públicas sin identificación reprodujeron el mismo rechazo,
+una con el perfil del monitor y otra con un perfil temporal vacío. La
+respuesta fue HTTP 200 con el título `Request Rejected`, no un timeout ni
+un 403. La página mostraba un Support ID de la protección del portal.
+Este formato se documenta en [F5](https://my.f5.com/manage/s/article/K000146818):
+el administrador puede consultar la regla exacta mediante ese identificador.
+
+El formulario de selección del trámite contenía `;jsessionid=…` en sus
+acciones, incluso después de haber inicializado la sesión de la portada.
+La portada `/icpplus` y el trámite `/icpplustiem` establecen contextos de
+sesión distintos. Una recarga normal del formulario del trámite, después
+de recibir su cookie de sesión, eliminó el identificador de las acciones
+y permitió avanzar a la identificación, sin enviar datos personales.
+El monitor incorpora ahora esa misma recarga condicional una sola vez,
+antes de seleccionar el trámite. No cambia los parámetros del formulario,
+las protecciones del navegador ni el horario de consulta.
+
+Las pruebas apuntan a la inicialización de la sesión y a las URL del
+formulario como desencadenante reproducible; no prueban qué regla interna
+aplicó el portal ni garantizan que no vuelva a rechazar otra petición.
+Los futuros rechazos guardan el Support ID numérico en el resultado y
+registro locales, sin capturas ni HTML de páginas con identidad. Ese
+identificador no se publica en el panel.
+
+La prueba del código corregido, a las 02:07 del 26 de octubre, alcanzó de
+nuevo el formulario de identificación sin rechazo. Se detuvo allí sin
+introducir datos ni consultar disponibilidad; no sustituye al estado de
+la consulta de las 02:00. Pasaron las 33 pruebas locales, incluida la
+inicialización del formulario del trámite y la omisión del reintento
+cuando solo quedan 30 segundos.

@@ -20,10 +20,11 @@ class LocalMonitorTests(unittest.TestCase):
         status = {'last_run': '2026-10-25T01:50:14Z', 'profiles': {'madrid_huellas': {
             'status': 'unavailable', 'last_check': '2026-10-25T01:50:14Z',
             'name': 'PRIVATE_NAME', 'logs': ['PRIVATE_DOCUMENT'],
+            'error_support_id': 'PRIVATE_SUPPORT_ID',
             'url': 'https://example.org/?session=SECRET',
         }}}
         result = json.dumps(public_status(status))
-        for secret in ('PRIVATE_NAME', 'PRIVATE_DOCUMENT', 'SECRET'):
+        for secret in ('PRIVATE_NAME', 'PRIVATE_DOCUMENT', 'PRIVATE_SUPPORT_ID', 'SECRET'):
             self.assertNotIn(secret, result)
         self.assertIn('unavailable', result)
 

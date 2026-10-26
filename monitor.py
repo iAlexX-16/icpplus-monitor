@@ -8,6 +8,7 @@ ICPPLUS appointment monitor for GitHub Actions.
 import json
 import os
 import random
+import re
 import smtplib
 import sys
 import time
@@ -70,10 +71,11 @@ ICP_NATIONALITY = os.environ.get("ICP_NATIONALITY", "")
 
 
 class AccessBlockedError(RuntimeError):
-    def __init__(self, message, reason='access_blocked', stage='unknown'):
+    def __init__(self, message, reason='access_blocked', stage='unknown', support_id=None):
         super().__init__(message)
         self.reason = reason
         self.stage = stage
+        self.support_id = support_id
 
 
 class ApplicantDetailsRequiredError(RuntimeError):
@@ -149,7 +151,12 @@ def check_access(driver, stage='unknown') -> None:
     if "403 forbidden" in title or "you don't have permission to access" in text:
         raise AccessBlockedError("ICPPLUS returned 403 Forbidden; availability could not be checked.", 'http_forbidden', stage)
     if "request rejected" in title or "requested url was rejected" in text:
-        raise AccessBlockedError(f"ICPPLUS rejected the request at stage '{stage}'; availability could not be checked.", 'request_rejected', stage)
+        support = re.search(r"support\s+id\s*(?:is)?\s*[:#]?\s*<?(\d{5,30})(?!\d)", text, re.I)
+        support_id = support.group(1) if support else None
+        message = f"ICPPLUS rejected the request at stage '{stage}'; availability could not be checked."
+        if support_id:
+            message += f" Support ID: {support_id}."
+        raise AccessBlockedError(message, 'request_rejected', stage, support_id=support_id)
     if "intrusion prevention" in title or "blocked by intrusion prevention" in text:
         raise AccessBlockedError("Network intrusion prevention blocked access; availability could not be checked.", 'network_filter', stage)
     if not text.strip():
@@ -175,6 +182,15 @@ def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
         raise RuntimeError("No availability message or calendar found. Availability could not be determined.")
 
 
+def refresh_initialized_form(driver, log, stage, description):
+    """Re-render after this application context has established its session cookie."""
+    if driver.find_elements(By.CSS_SELECTOR, "form[action*=';jsessionid=']"):
+        log(f"Refreshing the initialized session before {description}...")
+        driver.refresh()
+        human_delay(2, 4)
+        check_access(driver, stage)
+
+
 def prepare_check(driver, profile: dict, log):
     if ICP_NIE and not valid_nie(ICP_NIE):
         raise ApplicantDetailsRequiredError("The configured NIE has an invalid check digit. Correct the private ICP_NIE secret.")
@@ -197,13 +213,7 @@ def prepare_check(driver, profile: dict, log):
         except TimeoutException:
             continue
 
-    # Render the form again after its initial cookie has been established.
-    # Old URL-rewritten session IDs can otherwise be carried into a different app context.
-    if driver.find_elements(By.CSS_SELECTOR, "form[action*=';jsessionid=']"):
-        log("Refreshing the initialized session before selecting a province...")
-        driver.refresh()
-        human_delay(2, 4)
-        check_access(driver, 'inicio')
+    refresh_initialized_form(driver, log, 'inicio', 'selecting a province')
 
     log(f"Selecting province '{profile['province']}'...")
     try:
@@ -219,6 +229,9 @@ def prepare_check(driver, profile: dict, log):
 
     check_access(driver, 'provincia')
 
+    # /icpplus and /icpplustiem establish separate application sessions.
+    # Initialize the second context before selecting/submitting its procedure.
+    refresh_initialized_form(driver, log, 'provincia', 'selecting a procedure')
     log(f"Selecting procedure '{profile['procedure_name']}'...")
     tramite_select = Select(wait_for(driver, By.ID, sel["tramite_select_id"]))
     tramite_select.select_by_visible_text(profile["procedure_name"])
@@ -263,6 +276,8 @@ def check_appointments(driver, profile: dict, log, check_at=None, timing=None) -
                              and error.stage in ('inicio', 'provincia', 'trámite', 'identificación')
                              and remaining >= 35)
             if not retry_allowed:
+                if attempt == 0 and error.reason == 'request_rejected' and check_at and remaining < 35:
+                    log(f"Preparation was not retried: {remaining:.1f}s remain; at least 35s are required.")
                 raise
             log(f"Portal rejected preparation at '{error.stage}'. Restarting the monitor session once.")
             if os.environ.get('ICP_BROWSER_PROFILE'):
@@ -381,7 +396,7 @@ def run_profile(profile: dict, check_at=None) -> dict:
             if secret:
                 msg = msg.replace(secret, "[redacted]")
         ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
-        line = f"[{ts}] {msg}"
+        line = f"[{ts} UTC] {msg}"
         logs.append(line)
         print(f"[{profile['name']}] {line}")
 
@@ -412,6 +427,7 @@ def run_profile(profile: dict, check_at=None) -> dict:
             "status": "missed" if isinstance(e, CheckTimingError) else "requires_input" if isinstance(e, ApplicantDetailsRequiredError) else "blocked",
             "error_kind": e.reason if isinstance(e, AccessBlockedError) else type(e).__name__,
             "error_stage": e.stage if isinstance(e, AccessBlockedError) else None,
+            "error_support_id": e.support_id if isinstance(e, AccessBlockedError) else None,
             "url": BASE_URL,
             "last_check": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "logs": logs[-20:],

@@ -68,6 +68,21 @@ class QuarterScheduleTests(unittest.TestCase):
         self.assertEqual(prepare.call_count, 2)
         driver.delete_all_cookies.assert_called_once()
 
+    def test_rejection_with_thirty_seconds_left_does_not_retry_or_submit(self):
+        now = utc('2026-10-26T00:59:30')
+        target = utc('2026-10-26T01:00:00')
+        error = monitor.AccessBlockedError('Rejected', 'request_rejected', 'trámite')
+        driver, log = Mock(), Mock()
+        with patch.object(monitor, 'prepare_check', side_effect=error) as prepare, \
+             patch.object(monitor, 'datetime') as clock, patch.object(monitor, 'wait_until') as gate:
+            clock.now.return_value = now
+            with self.assertRaises(monitor.AccessBlockedError):
+                monitor.check_appointments(driver, {}, log, check_at=target)
+        self.assertEqual(prepare.call_count, 1)
+        gate.assert_not_called()
+        driver.delete_all_cookies.assert_not_called()
+        self.assertIn('30.0s remain', log.call_args.args[0])
+
     def test_captcha_is_not_retried(self):
         error = monitor.AccessBlockedError('CAPTCHA', 'captcha', 'identificación')
         with patch.object(monitor, 'prepare_check', side_effect=error) as prepare:
