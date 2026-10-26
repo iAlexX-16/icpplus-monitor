@@ -147,3 +147,33 @@ introducir datos ni consultar disponibilidad; no sustituye al estado de
 la consulta de las 02:00. Pasaron las 33 pruebas locales, incluida la
 inicialización del formulario del trámite y la omisión del reintento
 cuando solo quedan 30 segundos.
+
+## Error de lectura de disponibilidad de las 02:15
+
+La preparación corregida completó el trámite y la identificación. El envío
+comenzó a las 02:15:00.000 (Europe/Madrid) y la petición de disponibilidad
+a las 02:15:00.260. Ocho segundos después, el lector terminó con `error`
+porque no reconoció un mensaje de ausencia de citas ni el calendario.
+Ese estado indica disponibilidad desconocida; no equivale a un nuevo
+rechazo confirmado del portal.
+
+Se detectó un defecto verificable: el lector comprobaba los mensajes una
+sola vez y luego esperaba únicamente el calendario durante ocho segundos.
+Una respuesta de ausencia de citas que llegara durante esa espera se perdía.
+Una reproducción con Chrome y un servidor local lo confirmó: el mensaje
+apareció a los 500 ms, pero el código antiguo devolvió error tras 8,1 s.
+Esta reproducción demuestra el defecto; por sí sola no recupera el
+contenido exacto que devolvió el portal a las 02:15.
+
+El lector revisa ahora mensajes, calendario visible y rechazos en cada
+sondeo durante un máximo de 30 segundos. Tolera una página transitoriamente
+vacía y cambios de elementos durante la navegación; normaliza espacios y
+saltos de línea. Solo lee el documento que ya está cargando: no reenvía
+formularios ni solicita nuevas citas. Las respuestas desconocidas conservan
+el estado de error y registran únicamente ruta sin sesión ni parámetros,
+identificadores de controles y número de marcos, sin valores de formulario,
+cookies, HTML completo ni texto de la página.
+
+Las tres pruebas locales con respuesta tardía (ausencia de citas,
+calendario y rechazo) se clasificaron correctamente en unos 0,6 s.
+Pasaron las 38 pruebas unitarias.

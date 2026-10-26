@@ -15,6 +15,7 @@ import time
 import argparse
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
@@ -27,7 +28,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import (TimeoutException, WebDriverException,
+                                        NoSuchElementException, StaleElementReferenceException)
 
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
@@ -145,7 +147,7 @@ def save_debug_screenshot(driver, log) -> None:
         log(f"Could not save debug page source: {e}")
 
 
-def check_access(driver, stage='unknown') -> None:
+def check_access(driver, stage='unknown', allow_empty=False) -> None:
     text = driver.find_element(By.TAG_NAME, "body").text.lower()
     title = driver.title.lower()
     if "403 forbidden" in title or "you don't have permission to access" in text:
@@ -159,27 +161,58 @@ def check_access(driver, stage='unknown') -> None:
         raise AccessBlockedError(message, 'request_rejected', stage, support_id=support_id)
     if "intrusion prevention" in title or "blocked by intrusion prevention" in text:
         raise AccessBlockedError("Network intrusion prevention blocked access; availability could not be checked.", 'network_filter', stage)
-    if not text.strip():
+    if not text.strip() and not allow_empty:
         raise AccessBlockedError("ICPPLUS returned an empty page; availability could not be checked.", 'empty_page', stage)
     challenges = driver.find_elements(By.CSS_SELECTOR, "iframe[src*='recaptcha'], iframe[src*='hcaptcha'], input[name='captcha']")
     if any(element.is_displayed() for element in challenges):
         raise AccessBlockedError("Manual CAPTCHA required; availability could not be checked.", 'captcha', stage)
 
 
-def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
-    check_access(driver)
-    page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
-    for phrase in profile.get("no_slots_phrases") or DEFAULT_NO_SLOTS_PHRASES:
-        if phrase.lower() in page_text:
-            log("An explicit no-appointments message was found.")
-            return False, BASE_URL
-    sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
+def response_page_state(driver):
+    """Only structural metadata; never form values, cookies, full HTML or page text."""
+    state = {}
     try:
-        wait_for(driver, By.ID, sel["calendar_indicator_id"], timeout=8)
-        log("Calendar/slot-selection element found - slots may be available!")
-        return True, BASE_URL
+        url = driver.current_url
+        path = urlsplit(url).path.split(';')[0] if isinstance(url, str) else ''
+        if re.fullmatch(r'/icp(?:plus|plustiem)/[A-Za-z][A-Za-z0-9.]*', path):
+            state['route'] = path
+        controls = []
+        for element in driver.find_elements(By.CSS_SELECTOR, 'input[id], select[id], button[id]'):
+            identifier = element.get_attribute('id')
+            if isinstance(identifier, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_\[\]-]{0,59}', identifier):
+                controls.append(identifier)
+        state['control_ids'] = sorted(set(controls))[:40]
+        state['frame_count'] = len(driver.find_elements(By.TAG_NAME, 'iframe'))
+    except WebDriverException:
+        state['inspection'] = 'unavailable'
+    return state
+
+
+def read_availability(driver, profile: dict, log) -> tuple[bool, str]:
+    sel = {**DEFAULT_SELECTORS, **(profile.get("selectors") or {})}
+    phrases = profile.get("no_slots_phrases") or DEFAULT_NO_SLOTS_PHRASES
+
+    def inspect_response(browser):
+        # Navigation uses eager loading: both messages and rejection pages may arrive later.
+        check_access(browser, 'respuesta de disponibilidad', allow_empty=True)
+        page_text = ' '.join(browser.find_element(By.TAG_NAME, 'body').text.lower().split())
+        if any(' '.join(phrase.lower().split()) in page_text for phrase in phrases):
+            return False, BASE_URL
+        for calendar in browser.find_elements(By.ID, sel['calendar_indicator_id']):
+            if calendar.is_displayed():
+                return True, BASE_URL
+        return False
+
+    try:
+        result = WebDriverWait(driver, 30, poll_frequency=0.25,
+                              ignored_exceptions=(NoSuchElementException, StaleElementReferenceException)).until(inspect_response)
     except TimeoutException:
-        raise RuntimeError("No availability message or calendar found. Availability could not be determined.")
+        log('Unrecognized availability page: ' + json.dumps(response_page_state(driver), ensure_ascii=True))
+        check_access(driver, 'respuesta de disponibilidad')
+        raise RuntimeError("No availability message or calendar found. Availability could not be determined.") from None
+    log('Calendar/slot-selection element found - slots may be available!' if result[0]
+        else 'An explicit no-appointments message was found.')
+    return result
 
 
 def refresh_initialized_form(driver, log, stage, description):

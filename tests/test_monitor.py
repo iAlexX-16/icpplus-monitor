@@ -32,9 +32,77 @@ class MonitorTests(unittest.TestCase):
         driver.find_element.return_value.text = "Identification required"
         driver.find_elements.return_value = []
         profile = {"province": "Madrid", "procedure_name": "Huellas"}
-        with patch.object(monitor, "wait_for", side_effect=monitor.TimeoutException()):
+        with patch.object(monitor, "WebDriverWait") as wait:
+            wait.return_value.until.side_effect = monitor.TimeoutException()
             with self.assertRaisesRegex(RuntimeError, "Availability could not be determined"):
                 monitor.read_availability(driver, profile, Mock())
+
+    def test_delayed_no_slots_message_is_read_after_first_poll(self):
+        driver = Mock(title='Cita previa')
+        driver.find_element.return_value.text = 'Consultando disponibilidad'
+        driver.find_elements.return_value = []
+        def next_poll(condition):
+            self.assertFalse(condition(driver))
+            driver.find_element.return_value.text = 'En este momento no hay\n citas\t disponibles'
+            return condition(driver)
+        with patch.object(monitor, 'WebDriverWait') as wait:
+            wait.return_value.until.side_effect = next_poll
+            result = monitor.read_availability(driver, {}, Mock())
+        self.assertEqual(result, (False, monitor.BASE_URL))
+
+    def test_delayed_rejection_is_blocked_instead_of_an_unknown_page(self):
+        driver = Mock(title='Cita previa')
+        driver.find_element.return_value.text = 'Consultando disponibilidad'
+        driver.find_elements.return_value = []
+        def next_poll(condition):
+            self.assertFalse(condition(driver))
+            driver.title = 'Request Rejected'
+            driver.find_element.return_value.text = 'The requested URL was rejected.'
+            return condition(driver)
+        with patch.object(monitor, 'WebDriverWait') as wait:
+            wait.return_value.until.side_effect = next_poll
+            with self.assertRaises(monitor.AccessBlockedError) as caught:
+                monitor.read_availability(driver, {}, Mock())
+        self.assertEqual(caught.exception.reason, 'request_rejected')
+        self.assertEqual(caught.exception.stage, 'respuesta de disponibilidad')
+
+    def test_transient_empty_response_is_waited_for(self):
+        driver = Mock(title='Cita previa')
+        driver.find_element.return_value.text = ''
+        driver.find_elements.return_value = []
+        def next_poll(condition):
+            self.assertFalse(condition(driver))
+            driver.find_element.return_value.text = 'No existen citas disponibles'
+            return condition(driver)
+        with patch.object(monitor, 'WebDriverWait') as wait:
+            wait.return_value.until.side_effect = next_poll
+            result = monitor.read_availability(driver, {}, Mock())
+        self.assertFalse(result[0])
+
+    def test_hidden_calendar_does_not_indicate_availability(self):
+        driver = Mock(title='Cita previa')
+        driver.find_element.return_value.text = 'Consultando disponibilidad'
+        calendar = Mock()
+        calendar.is_displayed.return_value = False
+        driver.find_elements.side_effect = lambda by, value: [calendar] if value == 'calendario' else []
+        def timeout_after_inspection(condition):
+            self.assertFalse(condition(driver))
+            raise monitor.TimeoutException()
+        with patch.object(monitor, 'WebDriverWait') as wait:
+            wait.return_value.until.side_effect = timeout_after_inspection
+            with self.assertRaises(RuntimeError):
+                monitor.read_availability(driver, {}, Mock())
+
+    def test_response_metadata_omits_session_query_values_and_page_text(self):
+        driver = Mock(current_url='https://icp.administracionelectronica.gob.es/icpplustiem/acCitarB;jsessionid=PRIVATE_SESSION?nie=PRIVATE_NIE')
+        control = Mock()
+        control.get_attribute.return_value = 'idSede'
+        driver.find_elements.side_effect = lambda by, value: [] if value == 'iframe' else [control]
+        state = monitor.response_page_state(driver)
+        self.assertEqual(state['route'], '/icpplustiem/acCitarB')
+        self.assertEqual(state['control_ids'], ['idSede'])
+        self.assertNotIn('PRIVATE', json.dumps(state))
+        driver.find_element.assert_not_called()
 
     def test_invalid_nie_stops_before_contacting_official_site(self):
         driver = Mock()
