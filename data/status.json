@@ -1,15 +1,16 @@
 {
-  "last_run": "2026-10-29T08:45:02+00:00",
+  "last_run": "2026-10-29T09:00:02+00:00",
   "profiles": {
     "madrid_huellas": {
-      "status": "unavailable",
-      "last_check": "2026-10-29T08:45:00+00:00",
+      "status": "blocked",
+      "last_check": "2026-10-29T09:00:00+00:00",
       "url": "https://icp.administracionelectronica.gob.es/icpplus/index.html",
-      "target_check_at": "2026-10-29T08:45:00.000+00:00",
-      "prepared_at": "2026-10-29T08:44:19.678+00:00",
-      "check_requested_at": "2026-10-29T08:45:00.003+00:00",
-      "availability_requested_at": "2026-10-29T08:45:00.182+00:00",
-      "dispatch_lateness_ms": 4
+      "target_check_at": "2026-10-29T09:00:00.000+00:00",
+      "prepared_at": "2026-10-29T08:59:20.278+00:00",
+      "check_requested_at": "2026-10-29T09:00:00.005+00:00",
+      "dispatch_lateness_ms": 6,
+      "error_kind": "empty_page",
+      "error_stage": "respuesta de identidad"
     }
   }
 }
